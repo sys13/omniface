@@ -1,6 +1,6 @@
 {
   "name": "@omniface/testing",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Drive one omniface op through REST, SDK, CLI and MCP and check they agree; generate the conformance suite from the definition.",
   "keywords": [
     "omniface",

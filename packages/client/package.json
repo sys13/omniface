@@ -1,6 +1,6 @@
 {
   "name": "@omniface/client",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Runtime shared by omniface's TypeScript SDK and CLI: auth, retries, idempotency keys, pagination, typed errors.",
   "keywords": [
     "omniface",

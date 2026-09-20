@@ -1,6 +1,6 @@
 {
   "name": "omniface",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Define an app's operations once; serve REST, SDK, CLI and MCP as facets of it.",
   "keywords": [
     "api",
