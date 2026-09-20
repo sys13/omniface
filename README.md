@@ -168,8 +168,7 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   its cases. `pluginCases(...)` does the same for a plugin, against a sample app on every facet.
   One exception, and it is written down rather than glossed: **the web facet's generated cases do not
   read the page.** A screen's answer is compared on success and on error code, never on content, so
-  redaction and field agreement there rest on hand-written tests — see "Not yet" below and
-  #30.
+  redaction and field agreement there rest on hand-written tests — see "Not yet" below.
 - **Tooling.** `omniface dev | mcp | inspect | build | lint | conformance | diff`, installed as a real `omniface`
   bin, and an inspector web page. `omniface conformance` runs the generated suite from a terminal or
   CI: with no setup at all it runs the checks that read the manifest, and it runs the rest once a
@@ -205,7 +204,7 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
 - CLI keychain storage and completions; inspector try-it and live trace (backlog E11 — the playground).
 - A web facet: declared ops rendered as screens, and offered to the browser's agent over WebMCP
   (backlog E12). New as of 2026-09-19, and it reverses two recorded decisions — the epic says why.
-- Content conformance for the web facet (backlog 12.10, #30).
+- Content conformance for the web facet (backlog 12.10).
   The screens and the browser agent are built, and the web channel refuses exactly what the other four
   refuse. What it cannot yet prove is that it *agrees*: `outcomesAgree` skips value comparison for any
   answer rendered for a person, so gutting the renderers still passes every generated case. Redaction
