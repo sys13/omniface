@@ -91,7 +91,7 @@ exception that skips scoring entirely.
 | 2.3 | JWT adapter (issuer/JWKS verification) | M | want | done |
 | 2.4 | Clerk and WorkOS adapters | M | want | done |
 | 2.5 | CORS, CSRF and security headers, default-on for the REST facet | S | want | done |
-| 2.6 | Per-facet auth presentation: `Authorization` header, SDK constructor, CLI `login`, MCP OAuth 2.1 / client config — one credential, four surfaces (needs 3.1) | L | want | open |
+| 2.6 | Per-facet auth presentation: `Authorization` header, SDK constructor, CLI `login`, MCP OAuth 2.1 / client config — one credential, four surfaces (needs 3.1) | L | want | **partial** — discovery (RFC 9728) landed; SDK constructor, CLI `login` and the keychain still open |
 | 2.7 | Persistent API-key store adapter (the built-in store is in-memory behind an interface) | S | want | done |
 
 Where each landed: the contract is `AuthAdapter` in the core (`facet`), the adapters and the
@@ -114,13 +114,35 @@ Three things worth knowing about how they were built:
 - **`apiKeys()` is both.** It still authenticates on its own by default. Pass `authenticate: false`
   and its `.adapter` to `auth({ adapters: [...] })` to make it one provider among several.
 
-**2.6 is still open, but no longer blocked:** the per-facet `adapters` slot from
-[3.1](#e3--plugin-platform) exists now, and `apiKeys()` already uses it to advertise its security
-scheme in OpenAPI and add a `whoami` command to the CLI. What 2.6 still needs is the presentation
-itself — an SDK constructor option, a CLI `login` device flow, MCP OAuth 2.1 — wired through that
-slot. Until then a credential reaches every facet as a bearer token (`Authorization`, the SDK
+**2.6 is partial, and it is being done one surface at a time.** The per-facet `adapters` slot from
+[3.1](#e3--plugin-platform) exists, and `apiKeys()` already uses it to advertise its security scheme
+in OpenAPI and add a `whoami` command to the CLI.
+
+**What landed: discovery.** An app names its authorization server —
+`oauth: { authorizationServers: ['https://auth.example.com'] }` — and omniface serves RFC 9728
+protected-resource metadata at `/.well-known/oauth-protected-resource`, puts a `WWW-Authenticate`
+pointing at it on every REST refusal a credential would have fixed, and sets the same header on an
+MCP-over-HTTP response from a caller that presented none. The scopes in the document are derived
+from the ops' `scope` traits rather than listed again, so the document cannot advertise
+authorization the app does not enforce. Nothing about this issues or verifies a token: Gate 4 holds,
+and omniface does not become an authorization server. It is the half of the handshake that was
+missing — an agent reaching a server it has no credential for had no way to find out where to get
+one, so one had to be handed to it out of band.
+
+The declaration sits on the app rather than under a facet, because it is not one facet's answer:
+REST serves the document and MCP points at it, and a copy under each would be two places for the
+same answer to be given differently. A plugin cannot serve it — plugin REST routes are namespaced
+under `/_<plugin>` on purpose — so this is core, not an adapter.
+
+**What is still open:** the SDK constructor option, the CLI `login` device flow and the keychain it
+writes to (6.1/6.3, cheapest as one slice), and the web facet's sign-in screen (12.5). Until those
+land a credential still reaches those facets as a bearer token (`Authorization`, the SDK
 constructor, `--api-key`, the MCP server's env), and a browser cookie reaches REST and
 MCP-over-HTTP only.
+
+**One policy question was deliberately not answered:** MCP-over-HTTP sets the challenge header but
+does not turn a credential-less call into a 401. An app may project public ops to MCP, and refusing
+every anonymous call would decide that on the app's behalf from inside the facet.
 
 **Done when:** the example app authenticates a real Better Auth session and a raw API key,
 on all four facets, with conformance cases covering both. — done:

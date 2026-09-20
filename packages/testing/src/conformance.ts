@@ -9,7 +9,7 @@ import {
   type ManifestOp,
 } from 'omniface'
 import { hasScope } from 'omniface/plugins'
-import { CHANNELS, createHarness, outcomesAgree, type Channel, type Harness, type Outcome } from './harness.ts'
+import { BASE_URL, CHANNELS, createHarness, outcomesAgree, type Channel, type Harness, type Outcome } from './harness.ts'
 import { screenProblems } from './screen.ts'
 
 /**
@@ -35,6 +35,7 @@ export const CHECKS = [
   'agent',
   'csrf',
   'presentation',
+  'discovery',
 ] as const
 export type Check = (typeof CHECKS)[number]
 
@@ -404,6 +405,64 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
           if (!outcome.ok) problems.push(`${channel}: ${outcome.code} (${outcome.message})`)
         }
         return { problems, outcomes }
+      })
+    }
+
+    // Where a caller with no credential goes to get one. An app that declares an authorization
+    // server is making a promise to a stranger — that being refused tells them where to go — and a
+    // promise nothing checks is the kind this repo has been bitten by. Only ops that actually
+    // refuse an anonymous caller are asked; a public op has nothing to point at.
+    if (manifest.oauth && op.rest && typeof traits.scope === 'string') {
+      add('discovery', ['rest'], async (h) => {
+        const problems: string[] = []
+        // The same request the `anonymous` check makes, minus the credential: a refusal for the
+        // wrong reason (an empty body is `invalid_input`, not `unauthenticated`) would prove
+        // nothing about where to get a credential.
+        let path = op.rest!.path
+        const rest = { ...sample }
+        for (const p of op.rest!.pathParams) {
+          path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p] ?? MISSING_ID)))
+          delete rest[p]
+        }
+        const url = new URL(BASE_URL + path)
+        const init: RequestInit = { method: op.rest!.method }
+        if (op.rest!.method === 'GET' || op.rest!.method === 'DELETE') {
+          for (const [k, v] of Object.entries(rest)) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
+        } else {
+          init.body = JSON.stringify(rest)
+          init.headers = { 'content-type': 'application/json' }
+        }
+        const refused = await h.fetch(url, init)
+        if (refused.status !== 401) {
+          problems.push(`a scoped op answered an anonymous caller with ${refused.status}, expected 401`)
+          return { problems }
+        }
+        const header = refused.headers.get('www-authenticate')
+        if (!header) {
+          problems.push('refused an anonymous caller without saying where to get a credential')
+          return { problems }
+        }
+        const metadataUrl = /resource_metadata="([^"]+)"/.exec(header)?.[1]
+        if (!metadataUrl) {
+          problems.push(`WWW-Authenticate names no resource metadata: ${header}`)
+          return { problems }
+        }
+        const doc = await h.fetch(new URL(metadataUrl))
+        if (!doc.ok) {
+          problems.push(`the metadata the refusal points at answered ${doc.status}`)
+          return { problems }
+        }
+        const body = (await doc.json()) as { authorization_servers?: unknown; scopes_supported?: unknown; resource?: unknown }
+        if (!body.resource) problems.push('the metadata names no resource')
+        if (!Array.isArray(body.authorization_servers) || !body.authorization_servers.length) {
+          problems.push('the metadata names no authorization server, so a caller still cannot get a credential')
+        }
+        // The scopes are the ops' own. A document that omits the scope this op enforces would send
+        // a caller to ask for a token that cannot open the door it was refused at.
+        if (!Array.isArray(body.scopes_supported) || !body.scopes_supported.includes(traits.scope)) {
+          problems.push(`the metadata does not advertise "${traits.scope}", the scope this op enforces`)
+        }
+        return { problems }
       })
     }
 

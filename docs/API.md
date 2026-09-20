@@ -115,6 +115,11 @@ rather than inferred — see [SDKS.md](SDKS.md).
 `runCli`, `RunCliOptions`, `CliIO`, `EXIT_CODES`. A generated CLI package is `bin.mjs` plus a
 manifest; everything it does lives here.
 
+`protectedResourceMetadata`, `PROTECTED_RESOURCE_PATH`, `oauthChallenge`, `declaredScopes`,
+`OAuthResourceConfig` — where a caller with no credential goes to get one (RFC 9728). Discovery
+only: an app names somebody else's authorization server, and the scopes advertised are the ones its
+ops already declare.
+
 ## `@omniface/testing`
 
 `createHarness`, `Harness`, `HarnessOptions`, `CallOptions`, `Channel`, `CHANNELS`, `Outcome`,

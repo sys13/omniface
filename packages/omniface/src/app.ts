@@ -1,6 +1,7 @@
 import { adapterProblems, type PluginAdapters } from './adapters.ts'
 import { agentMayCall, MINT_OP, type WebAgentConfig } from './agent.ts'
 import { FacetError, errors, toFacetError } from './errors.ts'
+import type { OAuthResourceConfig } from './facets/oauth.ts'
 import type { SecurityConfig } from './facets/security.ts'
 import { stripInternal, toJSONSchema } from './jsonschema.ts'
 import { conventionalCommand, type HttpMethod } from './naming.ts'
@@ -118,6 +119,13 @@ export type AppConfig<T extends OpsTree, Ids extends string = OpIds<T>> = {
   ops: T
   /** Omitted: every MVP facet is on. Present: only the facets listed. */
   facets?: FacetsConfig<Ids>
+  /**
+   * Where a caller goes to get a credential (RFC 9728). Not under a facet, because it is not one
+   * facet's answer: REST serves the document and MCP points at it, and a copy under each would be
+   * two places for the same answer to be given differently. See {@link OAuthResourceConfig} — it
+   * is discovery only, and omniface never becomes an authorization server.
+   */
+  oauth?: OAuthResourceConfig
 }
 
 export type InvokeInit = {
@@ -148,6 +156,8 @@ export interface App<T extends OpsTree = OpsTree> {
   /** Per-facet adapters contributed by plugins, in install order. Facets read them; ops do not. */
   readonly adapters: readonly PluginAdapters[]
   readonly facets: NormalizedFacets
+  /** The app's protected-resource declaration, when it named an authorization server. */
+  readonly oauth?: OAuthResourceConfig
   /** Run one op through the full pipeline. Every facet calls this; nothing else runs handlers. */
   invoke(id: string, rawInput: unknown, init: InvokeInit): Promise<unknown>
   /** Type-only: the op tree, for inferred clients. */
@@ -429,6 +439,7 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
     plugins,
     adapters,
     facets,
+    ...(config.oauth ? { oauth: config.oauth } : {}),
     invoke,
   }
 }

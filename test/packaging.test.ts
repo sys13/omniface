@@ -112,7 +112,8 @@ describe('public API surface', () => {
       'FormatDiffOptions', 'ManifestChange', 'ManifestDiff', 'Unfixable',
       'Hook', 'HookStage', 'IO', 'InferIn', 'InferOut', 'Invocation', 'InvokeInit', 'JSONSchema', 'LintFinding',
       'LintOptions', 'MANIFEST_VERSION', 'MASK', 'MCP_TOOL_BUDGET', 'Manifest', 'ManifestAdapters', 'ManifestOp', 'ManifestScreen', 'ManifestTool',
-      'McpCallContext', 'McpConfig', 'McpFacetAdapter', 'McpOverride', 'McpToolGroup', 'NormalizedFacets', 'Op',
+      'McpCallContext', 'McpConfig', 'McpFacetAdapter', 'McpOverride', 'McpToolGroup', 'NormalizedFacets',
+      'OAuthResourceConfig', 'PROTECTED_RESOURCE_PATH', 'declaredScopes', 'oauthChallenge', 'protectedResourceMetadata', 'Op',
       'OVERRIDE_BUDGET', 'OpBuilder', 'OpConfig', 'OpFactory', 'OpIds', 'OpInspection', 'OpTraits', 'OpsTree',
       'OriginMatcher', 'Plugin',
       'PluginAdapters', 'Principal', 'RESERVED_CLI_COMMANDS', 'RESERVED_CLI_FLAGS', 'RESERVED_SDK_OPTIONS',
@@ -158,7 +159,7 @@ describe('public API surface', () => {
     ],
     'packages/cli/dist/index.d.ts': ['CliIO', 'EXIT_CODES', 'RunCliOptions', 'runCli'],
     'packages/testing/dist/index.d.ts': [
-      'ApiKeyStoreCaseOptions', 'CHANNELS', 'CHECKS', 'CallOptions', 'CaseResult', 'Channel', 'Check',
+      'ApiKeyStoreCaseOptions', 'BASE_URL', 'CHANNELS', 'CHECKS', 'CallOptions', 'CaseResult', 'Channel', 'Check',
       'ConformanceCase', 'ConformanceCoverage', 'ConformanceOptions', 'Harness', 'HarnessOptions', 'OpConformanceOptions',
       'OpCoverage', 'Outcome', 'PluginCase', 'PluginConformanceOptions', 'SampleAppOptions', 'StoreCase',
       'apiKeyStoreCases', 'conformanceCases', 'conformanceCoverage', 'createHarness', 'createSampleApp',

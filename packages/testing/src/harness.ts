@@ -31,7 +31,8 @@ export type HarnessOptions = { apiKey?: string }
 /** Per-call knobs. `idempotencyKey` is carried the way each facet carries one. */
 export type CallOptions = { apiKey?: string; idempotencyKey?: string }
 
-const BASE_URL = 'http://facet.test'
+/** The origin every in-process facet is driven against. Exported so a case can build a raw request. */
+export const BASE_URL = 'http://facet.test'
 
 /**
  * Drive one app through every MVP facet, the way a real consumer would: raw HTTP, the TS SDK,

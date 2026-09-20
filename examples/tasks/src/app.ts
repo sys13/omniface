@@ -210,6 +210,11 @@ export function createTasksApp(options: TasksAppOptions = {}) {
         },
       },
     },
+    // Where a caller with no credential goes to get one. The app names somebody else's
+    // authorization server; omniface never becomes one. The scopes are not repeated here — they
+    // are derived from the `scope` traits the ops already declare, so the document cannot drift
+    // from what is actually enforced.
+    oauth: { authorizationServers: ['https://auth.example.com'] },
   })
 }
 

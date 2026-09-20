@@ -59,6 +59,13 @@ export { renderIndex, renderScreen, escapeHtml, webTools, type ScreenContext, ty
 export { agentMayCall, type AgentAllow, type WebAgentConfig } from './agent.ts'
 export { createWebApp, WEB_CSP, type WebAppOptions } from './facets/web-server.ts'
 export {
+  challenge as oauthChallenge,
+  declaredScopes,
+  protectedResourceMetadata,
+  PROTECTED_RESOURCE_PATH,
+  type OAuthResourceConfig,
+} from './facets/oauth.ts'
+export {
   MASK,
   humanLabel,
   presentFields,

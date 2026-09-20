@@ -8,6 +8,7 @@ import { errors, toFacetError, type FacetError } from '../errors.ts'
 import { objectProperties } from '../jsonschema.ts'
 import { buildManifest, type Manifest } from '../manifest.ts'
 import type { Credential } from '../plugin.ts'
+import { challenge, originOf } from './oauth.ts'
 import { clientFromHeaders, credentialFromHeaders } from './http.ts'
 
 export type McpServerOptions = {
@@ -261,6 +262,14 @@ export function createMcpHttpHandler(app: App, manifest: Manifest = buildManifes
     })
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
     await server.connect(transport)
-    return transport.handleRequest(request)
+    const response = await transport.handleRequest(request)
+    // The same pointer REST puts on a refusal, on the transport an agent actually reaches. It is a
+    // header rather than a 401: an app may project public ops to MCP, and turning every
+    // credential-less call into a refusal would decide that policy here. See the backlog.
+    const oauth = app.oauth
+    if (oauth && !credential) {
+      response.headers.set('www-authenticate', challenge(oauth, originOf(request)))
+    }
+    return response
   }
 }

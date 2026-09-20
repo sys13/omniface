@@ -1,4 +1,5 @@
 export {
+  BASE_URL,
   CHANNELS,
   createHarness,
   type CallOptions,

@@ -201,8 +201,12 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   TypeScript one (backlog 5.4). The OpenAPI document carries what an outside generator needs and
   [`examples/tasks/sdks/`](examples/tasks/sdks/) has starting configurations for four of them, but
   none of them runs in CI, so the agreement is argued rather than demonstrated.
-- Per-facet auth *presentation* (backlog 2.6): the `adapters` slot it needed now exists, but the SDK
-  constructor, a CLI `login` device flow and MCP OAuth 2.1 are not wired to it yet.
+- Per-facet auth *presentation* (backlog 2.6), three surfaces of four. Discovery landed: name an
+  authorization server with `oauth: { authorizationServers: [...] }` and the app serves RFC 9728
+  protected-resource metadata, and every refusal a credential would have fixed points at it, so an
+  agent can find out where to sign in instead of being handed a token out of band. The scopes in
+  that document come from the ops' `scope` traits, not a second list. Still missing: the SDK
+  constructor option, a CLI `login` device flow, and the web facet's sign-in screen.
 - CLI keychain storage and completions; inspector try-it and live trace (backlog E11 — the playground).
 - A web facet: declared ops rendered as screens, and offered to the browser's agent over WebMCP
   (backlog E12). New as of 2026-09-19, and it reverses two recorded decisions — the epic says why.

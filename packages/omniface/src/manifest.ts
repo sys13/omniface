@@ -1,3 +1,4 @@
+import type { OAuthResourceConfig } from './facets/oauth.ts'
 import { restNamespace, type CliFacetAdapter, type SdkFacetAdapter, type SecurityScheme } from './adapters.ts'
 import { agentMayCall, MINT_OP } from './agent.ts'
 import type { App } from './app.ts'
@@ -146,6 +147,12 @@ export type Manifest = {
   mcpTools: ManifestTool[]
   /** What plugins add to each facet. Empty when no plugin fills its `adapters` slot. */
   adapters: ManifestAdapters[]
+  /**
+   * Where a caller goes to get a credential (RFC 9728), when the app named an authorization
+   * server. It travels in the manifest because the CLI and the SDK run in another process: a
+   * facet that has to ask a human where to sign in is the gap this closes.
+   */
+  oauth?: OAuthResourceConfig
 }
 
 function manifestAdapters(app: App): ManifestAdapters[] {
@@ -371,5 +378,6 @@ export function buildManifest(app: App): Manifest {
     ops,
     mcpTools,
     adapters: manifestAdapters(app),
+    ...(app.oauth ? { oauth: app.oauth } : {}),
   }
 }

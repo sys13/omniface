@@ -6,6 +6,7 @@ import { coerceString, objectProperties, typeOf } from '../jsonschema.ts'
 import { buildManifest, type Manifest, type ManifestOp } from '../manifest.ts'
 import { buildOpenApi } from './openapi.ts'
 import { clientFromHeaders, credentialFromHeaders, facetFromHeaders, newRequestId, problemBody } from './http.ts'
+import { challenge, originOf, protectedResourceMetadata, PROTECTED_RESOURCE_PATH } from './oauth.ts'
 import { securityMiddleware, type SecurityConfig } from './security.ts'
 
 async function readInput(c: Context, op: ManifestOp): Promise<Record<string, unknown>> {
@@ -89,6 +90,12 @@ export function createRestApp(app: App, manifest: Manifest = buildManifest(app),
 
   hono.get('/openapi.json', (c) => c.json(openapi))
   hono.get('/.well-known/facet.json', (c) => c.json(manifest))
+  // Where a caller goes to get a credential (RFC 9728). Served next to the manifest because it is
+  // the same kind of thing: something a stranger can read before it has been let in.
+  const oauth = app.oauth
+  if (oauth) {
+    hono.get(PROTECTED_RESOURCE_PATH, (c) => c.json(protectedResourceMetadata(oauth, manifest, originOf(c.req.raw))))
+  }
   mountPluginRoutes(hono, adapters)
 
   for (const op of manifest.ops) {
@@ -120,6 +127,12 @@ export function createRestApp(app: App, manifest: Manifest = buildManifest(app),
         const err = toFacetError(raw)
         decorate(err.status, false)
         if (err.retryAfter !== undefined) c.header('retry-after', String(Math.ceil(err.retryAfter)))
+        // A refusal that says where to get a credential is the only thing that makes the discovery
+        // document findable: the caller learns from being refused, rather than having to know.
+        if (oauth && err.status === 401) {
+          const presented = credentialFromHeaders(c.req.raw.headers) !== undefined
+          c.header('www-authenticate', challenge(oauth, originOf(c.req.raw), presented ? 'invalid_token' : undefined))
+        }
         return c.body(JSON.stringify(problemBody(err, requestId)), err.status as 400, {
           'content-type': 'application/problem+json',
         })
