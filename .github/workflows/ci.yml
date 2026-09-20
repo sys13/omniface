@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: build, typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec tsc -p tsconfig.json --noEmit
+      - run: pnpm test:only
+      # The drift proof as a command rather than a test file: the example app's own CI is
+      # `omniface lint && omniface conformance --strict`, run through the installed bin (backlog 4.1).
+      - run: pnpm --filter example-tasks check
+
+  # The supported-runtime matrix (docs/RUNTIMES.md): install the packed packages into an empty
+  # project and drive every facet, on each runtime we claim to support.
+  install:
+    name: fresh install on node ${{ matrix.node }}
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.11', '22', '24']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: node scripts/smoke-install.mjs
+
+  install-bun:
+    name: fresh install on bun
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: bun scripts/smoke-install.mjs --runtime bun

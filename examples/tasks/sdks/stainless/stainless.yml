@@ -1,0 +1,34 @@
+# Stainless. The resource tree is written by hand, which is the point of this file: it is where
+# `x-omniface-sdk.method` earns its keep, because every entry below should be the method path facet's
+# own SDK uses rather than a name invented from the URL.
+#
+#   pnpm --filter example-tasks exec omniface build src/app.ts
+#   # then upload .omniface/openapi.json and this config through Stainless
+openapi_spec: ../../.omniface/openapi.json
+
+targets:
+  python:
+    package_name: tasks
+  node:
+    package_name: tasks-sdk
+
+resources:
+  tasks:
+    methods:
+      # Left of the colon: `x-omniface-sdk.method`. Right: `x-omniface-cli`-free REST binding.
+      create: post /tasks
+      list: get /tasks
+      get: get /tasks/{id}
+      update: patch /tasks/{id}
+      complete: post /tasks/{id}/complete
+      delete: delete /tasks/{id}
+
+  api_keys:
+    methods:
+      create: post /api-keys
+      list: get /api-keys
+      revoke: post /api-keys/{id}/revoke
+
+  auth:
+    methods:
+      whoami: get /auth/whoami

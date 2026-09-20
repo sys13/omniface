@@ -1,0 +1,5 @@
+{
+  "packageName": "tasks_sdk",
+  "projectName": "tasks-sdk",
+  "library": "asyncio"
+}

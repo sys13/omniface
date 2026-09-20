@@ -1,0 +1,24 @@
+# Speakeasy. Copy to `.speakeasy/workflow.yaml` at the root of the SDK repository.
+#
+#   pnpm --filter example-tasks exec omniface build src/app.ts
+#   speakeasy run
+#
+# The source is the document `omniface build` wrote. Point `location` at a URL instead when the SDK
+# is generated from a deployed app rather than from a checkout.
+workflowVersion: 1.0.0
+
+sources:
+  tasks:
+    inputs:
+      - location: ../../.omniface/openapi.json
+
+targets:
+  tasks-python:
+    target: python
+    source: tasks
+    output: ./python
+
+  tasks-go:
+    target: go
+    source: tasks
+    output: ./go

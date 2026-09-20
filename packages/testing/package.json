@@ -1,0 +1,56 @@
+{
+  "name": "@omniface/testing",
+  "version": "0.0.1",
+  "description": "Drive one omniface op through REST, SDK, CLI and MCP and check they agree; generate the conformance suite from the definition.",
+  "keywords": [
+    "omniface",
+    "testing",
+    "conformance"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sys13/omniface.git",
+    "directory": "packages/testing"
+  },
+  "homepage": "https://github.com/sys13/omniface#readme",
+  "bugs": "https://github.com/sys13/omniface/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/rewrite-dts-extensions.mjs dist",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "peerDependencies": {
+    "@omniface/cli": "workspace:^",
+    "@omniface/client": "workspace:^",
+    "omniface": "workspace:^"
+  },
+  "devDependencies": {
+    "@omniface/cli": "workspace:*",
+    "@omniface/client": "workspace:*",
+    "omniface": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

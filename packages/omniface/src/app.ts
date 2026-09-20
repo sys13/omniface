@@ -1,0 +1,436 @@
+import { adapterProblems, type PluginAdapters } from './adapters.ts'
+import { agentMayCall, MINT_OP, type WebAgentConfig } from './agent.ts'
+import { FacetError, errors, toFacetError } from './errors.ts'
+import type { SecurityConfig } from './facets/security.ts'
+import { stripInternal, toJSONSchema } from './jsonschema.ts'
+import { conventionalCommand, type HttpMethod } from './naming.ts'
+import { anonymous, createOpFactory, isOp, type FacetName, type Op, type OpFactory, type OpsTree } from './op.ts'
+import { STAGES, type Credential, type HookStage, type Invocation, type Plugin, type RegisteredOp } from './plugin.ts'
+import { validate } from './standard.ts'
+
+// ---------------------------------------------------------------------------------------------
+// Types
+
+type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never
+
+type CtxOfPlugins<P extends readonly Plugin<any, any>[]> = [P[number]] extends [never]
+  ? {}
+  : UnionToIntersection<P[number] extends infer X ? (X extends Plugin<infer C, any> ? C : never) : never>
+
+type OpsOfPlugins<P extends readonly Plugin<any, any>[]> = [P[number]] extends [never]
+  ? {}
+  : UnionToIntersection<P[number] extends infer X ? (X extends Plugin<any, infer O> ? O : never) : never>
+
+type Depth = [never, 0, 1, 2, 3, 4, 5, 6]
+
+/** Every op id in a tree, as a string literal union: 'tasks.create' | 'tasks.list' | … */
+export type OpIds<T, Prefix extends string = '', D extends number = 6> = [D] extends [never]
+  ? never
+  : string extends keyof T
+    ? string
+    : {
+        [K in keyof T & string]: T[K] extends Op<any, any> ? `${Prefix}${K}` : OpIds<T[K], `${Prefix}${K}.`, Depth[D]>
+      }[keyof T & string]
+
+export type RestOverride = { method?: HttpMethod; path?: string; status?: number }
+export type RestConfig<Id extends string = string> = {
+  ops?: Partial<Record<Id, RestOverride | false>>
+  /**
+   * CORS, CSRF and security headers. On by default, closed to cross-origin traffic until an
+   * origin is named; `false` turns it off entirely. See {@link SecurityConfig}.
+   */
+  security?: SecurityConfig | false
+}
+
+export type McpOverride = { name?: string; description?: string; maxItems?: number }
+export type McpToolGroup<Id extends string = string> = { description: string; ops: Id[] }
+export type McpConfig<Id extends string = string> = {
+  ops?: Partial<Record<Id, McpOverride | false>>
+  /** Intent-level tools that group several ops. Grouped ops are not also listed individually. */
+  tools?: Record<string, McpToolGroup<Id>>
+}
+
+export type CliOverride = { command?: string; args?: string[]; columns?: string[] }
+export type CliConfig<Id extends string = string> = {
+  binName?: string
+  ops?: Partial<Record<Id, CliOverride | false>>
+}
+
+export type SdkConfig = { packageName?: string }
+
+/**
+ * What an app may say about one screen. Step 2–3 of the override ladder (docs/DX.md): everything
+ * here is presentation over a screen the projection already derived. There is deliberately no way
+ * to add a screen, a field the op does not have, or an action that is not an op — that is the
+ * fence in E12, and `actions`/`then` are typed as op ids so crossing it fails `tsc`.
+ */
+export type WebOverride<Id extends string = string> = {
+  /** The screen's heading, and how it is named in the nav. */
+  title?: string
+  /** The route, under the facet's mount path. `{id}` placeholders name input fields. */
+  path?: string
+  /** Which fields the screen shows, in this order. Must be fields the op declares. */
+  fields?: string[]
+  /** Per-field labels, replacing the ones derived from the field names. */
+  labels?: Record<string, string>
+  /** Ask before running, or stop asking. A string is the question. */
+  confirm?: boolean | string
+  /** Which ops appear as actions on this screen, in this order. Replaces the derived list. */
+  actions?: Id[]
+  /** Where a successful write lands: another op's screen, or `back` to the one it came from. */
+  then?: Id | 'back'
+  /** Where the screen sits in the nav. Lower first; unset sorts after everything set. */
+  order?: number
+  /** Keep the route, take it out of the nav. */
+  hidden?: boolean
+}
+
+/**
+ * The web facet: the app's declared ops as screens. Opt-in — unlike the four MVP facets it is not
+ * on when `facets` is omitted, because a screen is something a person lands on and that should be
+ * a decision, not a default.
+ */
+export type WebConfig<Id extends string = string> = {
+  /** Where the screens mount. Default `/app`. */
+  path?: string
+  ops?: Partial<Record<Id, WebOverride<Id> | false>>
+  /**
+   * Offer the page's operations to the agent in the visitor's browser, over WebMCP. Absent means
+   * no tool is registered and a call claiming to come from one is refused — see {@link
+   * WebAgentConfig}, which is read both by what the page advertises and by what the pipeline
+   * allows, so the two cannot drift.
+   */
+  agent?: boolean | WebAgentConfig<Id>
+}
+
+export type FacetsConfig<Id extends string = string> = {
+  rest?: boolean | RestConfig<Id>
+  mcp?: boolean | McpConfig<Id>
+  cli?: boolean | CliConfig<Id>
+  sdk?: boolean | SdkConfig
+  web?: boolean | WebConfig<Id>
+}
+
+export type AppConfig<T extends OpsTree, Ids extends string = OpIds<T>> = {
+  name: string
+  version?: string
+  description?: string
+  ops: T
+  /** Omitted: every MVP facet is on. Present: only the facets listed. */
+  facets?: FacetsConfig<Ids>
+}
+
+export type InvokeInit = {
+  facet: FacetName
+  credential?: Credential
+  idempotencyKey?: string
+  requestId?: string
+  client?: { name?: string; version?: string }
+  /** The raw request headers, when the facet has any. Auth adapters read cookie sessions from here. */
+  headers?: Headers
+}
+
+export type NormalizedFacets = {
+  rest: RestConfig | null
+  mcp: McpConfig | null
+  cli: CliConfig | null
+  sdk: SdkConfig | null
+  web: WebConfig | null
+}
+
+export interface App<T extends OpsTree = OpsTree> {
+  readonly kind: 'omniface.app'
+  readonly name: string
+  readonly version: string
+  readonly description?: string
+  readonly ops: ReadonlyMap<string, RegisteredOp>
+  readonly plugins: readonly Plugin<any, any>[]
+  /** Per-facet adapters contributed by plugins, in install order. Facets read them; ops do not. */
+  readonly adapters: readonly PluginAdapters[]
+  readonly facets: NormalizedFacets
+  /** Run one op through the full pipeline. Every facet calls this; nothing else runs handlers. */
+  invoke(id: string, rawInput: unknown, init: InvokeInit): Promise<unknown>
+  /** Type-only: the op tree, for inferred clients. */
+  readonly '~ops'?: T
+}
+
+export interface Facet<Ctx, PluginOps extends OpsTree> {
+  readonly op: OpFactory<Ctx>
+  readonly plugins: readonly Plugin<any, any>[]
+  /** Override keys may name the app's ops and every plugin-contributed op. */
+  app<const T extends OpsTree>(config: AppConfig<T, OpIds<T & PluginOps>>): App<T & PluginOps>
+}
+
+// ---------------------------------------------------------------------------------------------
+// facet() and app()
+
+export function facet(): Facet<{}, {}>
+export function facet<const P extends readonly Plugin<any, any>[]>(config: {
+  plugins: P
+}): Facet<CtxOfPlugins<P>, OpsOfPlugins<P> extends OpsTree ? OpsOfPlugins<P> : {}>
+export function facet(config: { plugins?: readonly Plugin<any, any>[] } = {}): Facet<any, any> {
+  const plugins = config.plugins ?? []
+  const seen = new Set<string>()
+  for (const plugin of plugins) {
+    if (seen.has(plugin.name)) throw new Error(`facet: plugin "${plugin.name}" is installed twice`)
+    for (const req of plugin.requires ?? []) {
+      if (!seen.has(req)) {
+        throw new Error(`facet: plugin "${plugin.name}" requires "${req}" to be installed before it`)
+      }
+    }
+    seen.add(plugin.name)
+  }
+  return {
+    op: createOpFactory(),
+    plugins,
+    app: (appConfig) => createApp(appConfig, plugins) as any,
+  }
+}
+
+function flatten(tree: OpsTree, source: string, prefix: string[], out: Map<string, RegisteredOp>): void {
+  for (const [key, value] of Object.entries(tree)) {
+    const path = [...prefix, key]
+    const id = path.join('.')
+    if (isOp(value)) {
+      if (out.has(id)) {
+        throw new Error(`facet: op "${id}" from ${source} collides with one from ${out.get(id)!.source}`)
+      }
+      out.set(id, {
+        id,
+        path,
+        op: value,
+        inputSchema: toJSONSchema(value.input, 'input'),
+        outputSchema: toJSONSchema(value.output, 'output'),
+        source,
+      })
+    } else if (value && typeof value === 'object') {
+      flatten(value as OpsTree, source, path, out)
+    }
+  }
+}
+
+function normalizeFacets(facets: FacetsConfig | undefined): NormalizedFacets {
+  const pick = <C extends object>(v: boolean | C | undefined): C | null =>
+    v === undefined || v === false ? null : v === true ? ({} as C) : v
+  // `web` is absent from the default on purpose: the four MVP facets are on when nothing is said,
+  // the fifth is not. See {@link WebConfig}.
+  if (!facets) return { rest: {}, mcp: {}, cli: {}, sdk: {}, web: null }
+  return {
+    rest: pick(facets.rest),
+    mcp: pick(facets.mcp),
+    cli: pick(facets.cli),
+    sdk: pick(facets.sdk),
+    web: pick(facets.web),
+  }
+}
+
+function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: NormalizedFacets): void {
+  const unknown: string[] = []
+  const check = (facetName: string, ids: Iterable<string>) => {
+    for (const id of ids) if (!ops.has(id)) unknown.push(`${facetName}: "${id}"`)
+  }
+  check('rest.ops', Object.keys(facets.rest?.ops ?? {}))
+  check('mcp.ops', Object.keys(facets.mcp?.ops ?? {}))
+  check('cli.ops', Object.keys(facets.cli?.ops ?? {}))
+  check('web.ops', Object.keys(facets.web?.ops ?? {}))
+  const agent = facets.web?.agent
+  if (agent && agent !== true) {
+    check('web.agent.ops', Object.keys(agent.ops ?? {}))
+    // Asking for an attenuated credential without the plugin that mints one would silently fall
+    // back to the ambient session — the exact thing the setting exists to avoid.
+    if (agent.credential === 'attenuated' && !ops.has(MINT_OP)) {
+      throw new Error(
+        `facet: facets.web.agent.credential 'attenuated' needs the agentTokens() plugin, which contributes "${MINT_OP}"`,
+      )
+    }
+  }
+  // A web screen may name other ops — as actions, or as where a write lands. Those are op ids too,
+  // and a typo in one is the same drift as a typo in an override key.
+  for (const [id, override] of Object.entries(facets.web?.ops ?? {})) {
+    if (!override) continue
+    check(`web.ops["${id}"].actions`, override.actions ?? [])
+    if (override.then && override.then !== 'back') check(`web.ops["${id}"].then`, [override.then])
+  }
+  for (const [tool, group] of Object.entries(facets.mcp?.tools ?? {})) check(`mcp.tools.${tool}`, group.ops)
+  if (unknown.length) throw new Error(`facet: overrides reference unknown ops: ${unknown.join(', ')}`)
+}
+
+function collectAdapters(
+  ops: ReadonlyMap<string, RegisteredOp>,
+  plugins: readonly Plugin<any, any>[],
+  facets: NormalizedFacets,
+): PluginAdapters[] {
+  const collected = plugins.flatMap((p) => (p.adapters ? [{ plugin: p.name, ...p.adapters }] : []))
+  const problems = collected.flatMap(adapterProblems)
+
+  // What each plugin declares is checked on its own by `adapterProblems`; what two plugins declare
+  // *together* can only be checked here. A name that resolves to two things is drift by definition,
+  // and on the CLI and the SDK it would surface in another process, far from the cause.
+  const cliCommands = new Map<string, string>()
+  for (const [id, reg] of ops) {
+    if (!facets.cli) break
+    const override = facets.cli.ops?.[id]
+    if (override === false) continue
+    const command = override?.command ? override.command.split(/\s+/) : conventionalCommand(reg.path)
+    cliCommands.set(command.join(' '), `op "${id}"`)
+  }
+  const cliFlags = new Map<string, string>()
+  const sdkOptions = new Map<string, string>()
+  const claim = (taken: Map<string, string>, key: string, owner: string, what: string) => {
+    const already = taken.get(key)
+    if (already) problems.push(`${owner}: ${what} is already ${already}`)
+    else taken.set(key, owner)
+  }
+
+  for (const adapters of collected) {
+    const owner = `plugin "${adapters.plugin}"`
+    // A CLI command a plugin contributes is an alias for an op, so the op has to exist. Checked
+    // here rather than at first use: the CLI runs from a manifest, in another process.
+    for (const command of adapters.cli?.commands ?? []) {
+      if (!ops.has(command.op)) problems.push(`${owner}: CLI command "${command.command}" names unknown op "${command.op}"`)
+      claim(cliCommands, command.command, owner, `the CLI command "${command.command}"`)
+    }
+    for (const flag of adapters.cli?.flags ?? []) claim(cliFlags, flag.name, owner, `the CLI flag "--${flag.name}"`)
+    for (const option of adapters.sdk?.options ?? []) claim(sdkOptions, option.name, owner, `the SDK option "${option.name}"`)
+  }
+
+  if (problems.length) throw new Error(`facet: invalid plugin facet adapters:\n- ${problems.join('\n- ')}`)
+  return collected
+}
+
+let requestCounter = 0
+function newRequestId(): string {
+  requestCounter = (requestCounter + 1) % 1e9
+  return `req_${Date.now().toString(36)}${requestCounter.toString(36)}`
+}
+
+function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: readonly Plugin<any, any>[]): App<T> {
+  const ops = new Map<string, RegisteredOp>()
+  flatten(config.ops, 'app', [], ops)
+  for (const plugin of plugins) if (plugin.ops) flatten(plugin.ops, `plugin "${plugin.name}"`, [], ops)
+  const facets = normalizeFacets(config.facets as FacetsConfig | undefined)
+  checkOverrides(ops, facets)
+  const adapters = collectAdapters(ops, plugins, facets)
+  // Gate 1: a declared scope nobody enforces is a silent hole on every facet. Refuse to start.
+  const scoped = [...ops.values()].filter((r) => r.op.traits.scope).map((r) => r.id)
+  if (scoped.length && !plugins.some((p) => p.hooks?.authorize)) {
+    throw new Error(
+      `facet: ops declare scopes (${scoped.join(', ')}) but no plugin enforces them. Add scopes() to plugins.`,
+    )
+  }
+
+  const hooksFor = (stage: HookStage) =>
+    plugins.flatMap((p) => (p.hooks?.[stage] ? [p.hooks[stage]!] : []))
+  const hooks = Object.fromEntries(
+    STAGES.filter((s): s is HookStage => s !== 'handle').map((s) => [s, hooksFor(s)]),
+  ) as Record<HookStage, ReturnType<typeof hooksFor>>
+  const wraps = plugins.filter((p) => p.wrap)
+
+  async function invoke(id: string, rawInput: unknown, init: InvokeInit): Promise<unknown> {
+    const registered = ops.get(id)
+    if (!registered) throw errors.notFound(`Unknown operation "${id}"`)
+    const { op } = registered
+    if (op.traits.internal && init.facet !== 'internal') throw errors.notFound(`Unknown operation "${id}"`)
+
+    let responded = false
+    const inv: Invocation = {
+      requestId: init.requestId ?? newRequestId(),
+      facet: init.facet,
+      op: registered,
+      credential: init.credential,
+      idempotencyKey: init.idempotencyKey,
+      client: init.client,
+      headers: init.headers,
+      startedAt: Date.now(),
+      rawInput,
+      input: undefined,
+      principal: anonymous,
+      ctx: {},
+      output: undefined,
+      respond(output) {
+        responded = true
+        inv.output = output
+      },
+      get responded() {
+        return responded
+      },
+    }
+
+    const runStage = async (stage: HookStage) => {
+      for (const hook of hooks[stage]) {
+        if (responded) return
+        await hook(inv)
+      }
+    }
+
+    const pipeline = async (): Promise<unknown> => {
+      await runStage('authenticate')
+      await runStage('resolveTenant')
+      await runStage('rateLimit')
+
+      const parsed = await validate(op.input, inv.rawInput ?? undefined)
+      if (!parsed.ok) {
+        const summary = parsed.issues.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message)).join('; ')
+        throw errors.invalidInput(summary, parsed.issues)
+      }
+      inv.input = parsed.value
+      await runStage('validate')
+
+      // The app's declaration about browser agents, enforced where it cannot be talked around
+      // (docs/BACKLOG.md 12.7). `facet` here is a claim the caller made — it can narrow what is
+      // allowed and never widen it, which is why this only ever refuses.
+      if (inv.facet === 'webmcp' && !agentMayCall(facets.web, id, registered.op.traits)) {
+        throw errors.forbidden(`"${id}" is not offered to browser agents`)
+      }
+      await runStage('authorize')
+      await runStage('idempotency')
+
+      if (!responded) {
+        const raw = await op.handler({
+          input: inv.input,
+          ctx: inv.ctx,
+          principal: inv.principal,
+          facet: inv.facet,
+          requestId: inv.requestId,
+        })
+        const checked = await validate(op.output, raw)
+        if (!checked.ok) {
+          throw errors.internal(`Operation "${id}" returned output that does not match its schema`, checked.issues)
+        }
+        inv.output = stripInternal(checked.value, registered.outputSchema)
+      }
+      await runStage('after')
+      return inv.output
+    }
+
+    const run = wraps.reduceRight<() => Promise<unknown>>(
+      (next, plugin) => () => plugin.wrap!(inv, next),
+      async () => {
+        try {
+          return await pipeline()
+        } catch (err) {
+          throw toFacetError(err)
+        }
+      },
+    )
+    try {
+      return await run()
+    } catch (err) {
+      throw toFacetError(err)
+    }
+  }
+
+  return {
+    kind: 'omniface.app',
+    name: config.name,
+    version: config.version ?? '0.0.0',
+    description: config.description,
+    ops,
+    plugins,
+    adapters,
+    facets,
+    invoke,
+  }
+}
+
+export { FacetError }

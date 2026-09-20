@@ -1,0 +1,49 @@
+{
+  "name": "@omniface/cli",
+  "version": "0.0.1",
+  "description": "The engine that runs an omniface manifest as a command-line interface.",
+  "keywords": [
+    "omniface",
+    "cli",
+    "manifest"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sys13/omniface.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/sys13/omniface#readme",
+  "bugs": "https://github.com/sys13/omniface/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/rewrite-dts-extensions.mjs dist",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@omniface/client": "workspace:^"
+  },
+  "devDependencies": {
+    "omniface": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

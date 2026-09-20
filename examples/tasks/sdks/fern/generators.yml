@@ -1,0 +1,29 @@
+# Fern. Copy to `fern/generators.yml`, then:
+#
+#   pnpm --filter example-tasks exec omniface build src/app.ts
+#   fern generate --group python-sdk
+#
+# Pin `version` to a release of each generator before using this for anything real; the values
+# below are deliberately left unpinned rather than pinned to a version that has since moved.
+api:
+  specs:
+    - openapi: ../../.omniface/openapi.json
+
+groups:
+  python-sdk:
+    generators:
+      - name: fernapi/fern-python-sdk
+        version: <pin a release>
+        output:
+          location: local-file-system
+          path: ../generated/python
+        config:
+          client_class_name: Tasks
+
+  java-sdk:
+    generators:
+      - name: fernapi/fern-java-sdk
+        version: <pin a release>
+        output:
+          location: local-file-system
+          path: ../generated/java

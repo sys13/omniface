@@ -1,0 +1,78 @@
+{
+  "name": "omniface",
+  "version": "0.0.1",
+  "description": "Define an app's operations once; serve REST, SDK, CLI and MCP as facets of it.",
+  "keywords": [
+    "api",
+    "rest",
+    "openapi",
+    "mcp",
+    "cli",
+    "sdk",
+    "typescript",
+    "zod"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sys13/omniface.git",
+    "directory": "packages/omniface"
+  },
+  "homepage": "https://github.com/sys13/omniface#readme",
+  "bugs": "https://github.com/sys13/omniface/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./auth": "./dist/auth/index.js",
+    "./zod": "./dist/zod/index.js",
+    "./plugins": "./dist/plugins/index.js",
+    "./rest": "./dist/facets/rest.js",
+    "./mcp": "./dist/facets/mcp.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "omniface": "./bin/omniface.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "src",
+    "!dist/**/*.tsbuildinfo"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ../../scripts/rewrite-dts-extensions.mjs dist",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@standard-schema/spec": "^1.1.0",
+    "hono": "^4.13.8"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0",
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    },
+    "@opentelemetry/api": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "zod": "^4.6.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

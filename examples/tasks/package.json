@@ -1,0 +1,21 @@
+{
+  "name": "example-tasks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "omniface dev src/app.ts",
+    "lint": "omniface lint src/app.ts",
+    "conformance": "omniface conformance src/app.ts --strict",
+    "diff": "omniface diff .omniface/manifest.json src/app.ts",
+    "check": "pnpm lint && pnpm conformance"
+  },
+  "dependencies": {
+    "omniface": "workspace:*",
+    "@omniface/client": "workspace:*",
+    "@omniface/cli": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@omniface/testing": "workspace:*"
+  }
+}

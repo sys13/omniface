@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" content="#11151C" />
+<link rel="canonical" href="https://facet.dev/" />
+
+<!-- One claim, one number, under 300 characters. Wording is owned by
+     site/README.md; edit that first, then this. Never type a digit into copy
+     that no command on this machine will print. -->
+<meta name="description" content="facet is a TypeScript framework where your REST API, SDK, CLI and MCP server are all projections of one protocol-neutral definition. The definition writes the tests too: ten operations become 44 conformance cases that fail if any two interfaces disagree." />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="omniface" />
+<meta property="og:url" content="https://facet.dev/" />
+<meta property="og:title" content="facet — define the operation once, prove every interface agrees" />
+<meta property="og:description" content="Your REST API, SDK, CLI and MCP server as projections of one protocol-neutral definition. Ten operations become 44 generated conformance cases that fail if any two interfaces disagree." />
+<meta property="og:image" content="https://facet.dev/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="facet — define the operation once, prove every interface agrees" />
+<meta name="twitter:description" content="Your REST API, SDK, CLI and MCP server as projections of one protocol-neutral definition. Ten operations become 44 generated conformance cases that fail if any two interfaces disagree." />
+
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2311151C'/%3E%3Cpath d='M16 5l9 16H7z' fill='none' stroke='%23fff' stroke-width='1.8'/%3E%3C/svg%3E" />
+<!--ARTIFACT-KEEP-START-->
+<title>omniface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
+<style>
+/* ============================================================ TOKENS
+   The identity: one definition is white light; the four facets are the
+   spectrum it refracts into. So the brand accent is ink, not a hue —
+   colour is spent only where it names a facet, and nowhere else. */
+:root{
+  --paper:#F2F3F6; --paper-2:#FAFBFD; --panel:#FFFFFF;
+  --ink:#11151C; --ink-soft:#434C5A; --muted:#6B7686;
+  --hair:#DEE2EA; --hair-strong:#C4CBD6;
+  --code-bg:#11151C; --code-ink:#E7EAF0; --code-dim:#8892A4; --code-hair:#262E3A;
+  --rest:#A8621B; --sdk:#5B3FD0; --cli:#0B6E6E; --mcp:#AE2F60;
+  --btn-bg:#11151C; --btn-ink:#FAFBFD;
+  --sel:#DCE1F7;
+  --maxw:1140px;
+  --sans:'IBM Plex Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --disp:'Bricolage Grotesque','IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B0E13; --paper-2:#0E1219; --panel:#141922;
+    --ink:#EAEDF3; --ink-soft:#AAB4C3; --muted:#788394;
+    --hair:#1D242F; --hair-strong:#2B3441;
+    --code-bg:#070A0F; --code-ink:#E7EAF0; --code-dim:#7D8899; --code-hair:#1C2430;
+    --rest:#E8A64A; --sdk:#A492F7; --cli:#3FC2BE; --mcp:#F282A8;
+    --btn-bg:#EAEDF3; --btn-ink:#0B0E13;
+    --sel:#23304D;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B0E13; --paper-2:#0E1219; --panel:#141922;
+  --ink:#EAEDF3; --ink-soft:#AAB4C3; --muted:#788394;
+  --hair:#1D242F; --hair-strong:#2B3441;
+  --code-bg:#070A0F; --code-ink:#E7EAF0; --code-dim:#7D8899; --code-hair:#1C2430;
+  --rest:#E8A64A; --sdk:#A492F7; --cli:#3FC2BE; --mcp:#F282A8;
+  --btn-bg:#EAEDF3; --btn-ink:#0B0E13;
+  --sel:#23304D;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+::selection{background:var(--sel)}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,h4{margin:0;font-family:var(--disp);text-wrap:balance;line-height:1.1;letter-spacing:-.02em}
+p{margin:0}
+code,pre{font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radius:3px}
+
+/* ============================================================ LAYOUT */
+.wrap{max-width:var(--maxw);margin:0 auto;padding-inline:24px}
+.section{padding-block:88px;border-top:1px solid var(--hair)}
+@media(max-width:760px){.section{padding-block:58px}}
+
+.eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:var(--mono);font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:500}
+/* The tick is the four-facet spectrum in miniature — it encodes the page's
+   one structural idea, so it earns its place on every section. */
+.eyebrow::before{content:"";width:26px;height:3px;border-radius:2px;
+  background:linear-gradient(90deg,var(--rest) 0 25%,var(--sdk) 25% 50%,var(--cli) 50% 75%,var(--mcp) 75% 100%)}
+.sec-title{font-size:clamp(26px,3.6vw,40px);font-weight:700;letter-spacing:-.03em;margin-top:16px;max-width:22ch}
+.sec-lede{color:var(--ink-soft);font-size:clamp(15.5px,1.5vw,18px);max-width:64ch;margin-top:18px;line-height:1.6}
+.sec-lede + .sec-lede{margin-top:14px}
+b,strong{font-weight:600;color:var(--ink)}
+
+/* ============================================================ NAV */
+header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:saturate(1.3) blur(12px);border-bottom:1px solid var(--hair)}
+.nav-in{display:flex;align-items:center;gap:24px;height:58px;max-width:var(--maxw);margin:0 auto;padding-inline:24px}
+.brand{font-family:var(--mono);font-weight:600;font-size:15px;letter-spacing:-.01em;display:flex;align-items:center;gap:9px}
+.brand svg{display:block}
+.nav-links{display:flex;gap:20px;margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+.nav-links a:hover{color:var(--ink)}
+@media(max-width:900px){.nav-links{display:none}}
+.ghlink{font-family:var(--mono);font-size:12.5px;color:var(--muted);white-space:nowrap}
+.ghlink:hover{color:var(--ink)}
+@media(max-width:900px){.ghlink{margin-left:auto}}
+.tbtn{border:1px solid var(--hair-strong);background:transparent;color:var(--muted);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:13px;display:grid;place-items:center;transition:.15s;flex:none}
+.tbtn:hover{color:var(--ink);border-color:var(--ink)}
+
+/* ============================================================ HERO */
+.hero{padding-block:76px 64px}
+@media(max-width:760px){.hero{padding-block:48px 44px}}
+.hero h1{font-size:clamp(32px,5.2vw,58px);font-weight:800;letter-spacing:-.04em;line-height:1.02;max-width:15ch}
+.hero h1 em{font-style:normal;display:block;
+  background:linear-gradient(95deg,var(--rest),var(--sdk) 38%,var(--cli) 68%,var(--mcp));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-what{color:var(--ink);font-size:clamp(16.5px,1.8vw,20px);margin-top:26px;max-width:58ch;line-height:1.5}
+.hero-sub{color:var(--ink-soft);font-size:clamp(15px,1.5vw,17px);margin-top:16px;max-width:58ch}
+.hero-cta{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap;align-items:center}
+.btn{font-family:var(--mono);font-size:13px;font-weight:600;padding:12px 18px;border-radius:9px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;transition:.16s}
+.btn-primary{background:var(--btn-bg);color:var(--btn-ink)}
+.btn-primary:hover{transform:translateY(-1px)}
+.btn-ghost{border-color:var(--hair-strong);color:var(--ink)}
+.btn-ghost:hover{border-color:var(--ink)}
+.install{font-family:var(--mono);font-size:12.5px;background:var(--code-bg);color:var(--code-ink);padding:11px 14px;border-radius:9px;display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
+.install .dl{color:var(--code-dim)}
+.install .cp{color:var(--code-dim);cursor:pointer;font-size:11px;border:1px solid var(--code-hair);padding:2px 7px;border-radius:5px}
+.install .cp:hover{color:var(--code-ink)}
+.maturity{margin-top:22px;font-size:13.5px;color:var(--muted);max-width:62ch;line-height:1.55;border-left:2px solid var(--hair-strong);padding-left:14px}
+.maturity b{color:var(--ink-soft)}
+
+/* ============================================================ PRISM */
+.prism{margin-top:56px;border:1px solid var(--hair);border-radius:16px;background:var(--panel);overflow:hidden}
+.prism-head{display:flex;align-items:center;gap:12px;padding:13px 18px;border-bottom:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--muted);flex-wrap:wrap}
+.prism-head .cmd{color:var(--ink)}
+.prism-body{display:grid;grid-template-columns:minmax(0,1fr) 180px minmax(0,1fr);align-items:center}
+@media(max-width:940px){.prism-body{grid-template-columns:1fr}}
+.def{padding:26px 22px;border-right:1px solid var(--hair)}
+@media(max-width:940px){.def{border-right:none;border-bottom:1px solid var(--hair)}}
+.def-label,.out-label{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+pre.code{background:var(--code-bg);color:var(--code-ink);font-size:12.5px;line-height:1.65;padding:16px;border-radius:10px;overflow-x:auto;margin:0;tab-size:2}
+/* The narrow facet column would otherwise show a chunky native scrollbar on
+   every block; these are long single lines, so wrapping beats scrolling there. */
+pre.code::-webkit-scrollbar,.term pre::-webkit-scrollbar{height:8px}
+pre.code::-webkit-scrollbar-thumb,.term pre::-webkit-scrollbar-thumb{background:var(--code-hair);border-radius:4px}
+pre.code::-webkit-scrollbar-track,.term pre::-webkit-scrollbar-track{background:transparent}
+pre.code,.term pre{scrollbar-width:thin;scrollbar-color:var(--code-hair) transparent}
+.out .body pre.code{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:visible}
+pre.code .k{color:#C792EA}pre.code .s{color:#C3E88D}pre.code .f{color:#82AAFF}pre.code .c{color:var(--code-dim)}
+:root[data-theme="light"] pre.code .k,:root:not([data-theme="dark"]) pre.code .k{color:#C792EA}
+.beams{position:relative;height:100%;min-height:210px;display:grid;place-items:center}
+@media(max-width:940px){.beams{min-height:130px;border-bottom:1px solid var(--hair)}}
+.beams svg{width:100%;height:auto;max-width:100%;display:block}
+.beam{stroke-width:2;fill:none;stroke-linecap:round;stroke-dasharray:240;stroke-dashoffset:240;animation:draw 1.1s cubic-bezier(.3,.8,.4,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.beam{stroke-dashoffset:0}}
+.outs{padding:22px;display:flex;flex-direction:column;gap:10px}
+.out{border:1px solid var(--hair);border-radius:10px;overflow:hidden;background:var(--paper-2)}
+.out summary{cursor:pointer;list-style:none;padding:10px 14px;display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;color:var(--ink)}
+.out summary::-webkit-details-marker{display:none}
+.out summary::after{content:"+";margin-left:auto;color:var(--muted);font-size:14px}
+.out[open] summary::after{content:"−"}
+.out .dot{width:8px;height:8px;border-radius:50%;flex:none}
+.out .hint{color:var(--muted);font-size:11.5px;margin-left:2px}
+.out .body{padding:0 12px 12px}
+.out.rest .dot{background:var(--rest)} .out.sdk .dot{background:var(--sdk)}
+.out.cli .dot{background:var(--cli)} .out.mcp .dot{background:var(--mcp)}
+.prism-foot{padding:14px 18px;border-top:1px solid var(--hair);font-size:13px;color:var(--muted);line-height:1.55}
+
+/* ============================================================ TABLES */
+.tbl-scroll{overflow-x:auto;margin-top:34px;border:1px solid var(--hair);border-radius:12px;background:var(--panel)}
+table.cmp{border-collapse:collapse;width:100%;min-width:720px;font-size:14.5px}
+table.cmp th,table.cmp td{text-align:left;padding:16px 18px;border-bottom:1px solid var(--hair);vertical-align:top}
+table.cmp tr:last-child td{border-bottom:none}
+table.cmp th{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--paper-2)}
+table.cmp td:first-child{font-weight:600;width:26%}
+table.cmp td:nth-child(2){color:var(--ink-soft);width:37%}
+table.cmp td:last-child{color:var(--ink)}
+
+/* ============================================================ TRAIT FAN */
+.fan{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:1px;margin-top:36px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden}
+.fan-item{background:var(--panel);padding:20px 18px}
+.fan-item .who{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:600;display:flex;align-items:center;gap:8px}
+.fan-item .who .dot{width:7px;height:7px;border-radius:50%}
+.fan-item code{display:block;margin-top:12px;font-size:12.5px;color:var(--ink);background:var(--paper);border:1px solid var(--hair);padding:8px 10px;border-radius:7px;overflow-wrap:anywhere}
+.fan-item p{margin-top:10px;font-size:13.5px;color:var(--ink-soft);line-height:1.5}
+.fan-item.r .who{color:var(--rest)}.fan-item.r .dot{background:var(--rest)}
+.fan-item.s .who{color:var(--sdk)}.fan-item.s .dot{background:var(--sdk)}
+.fan-item.c .who{color:var(--cli)}.fan-item.c .dot{background:var(--cli)}
+.fan-item.m .who{color:var(--mcp)}.fan-item.m .dot{background:var(--mcp)}
+.fan-item.p{background:var(--code-bg);color:var(--code-ink)}
+.fan-item.p .who{color:var(--code-dim)}.fan-item.p .dot{background:var(--code-dim)}
+.fan-item.p code{background:transparent;border-color:var(--code-hair);color:var(--code-ink)}
+.fan-item.p p{color:var(--code-dim)}
+
+/* ============================================================ SPLIT */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start}
+@media(max-width:900px){.split{grid-template-columns:1fr;gap:32px}}
+.rule-list{list-style:none;padding:0;margin:26px 0 0;display:flex;flex-direction:column;gap:18px}
+.rule-list li{display:flex;gap:14px;align-items:flex-start}
+.rule-list .mk{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--hair-strong);border-radius:6px;padding:3px 7px;flex:none;margin-top:2px}
+.rule-list b{display:block;font-size:15px}
+.rule-list p{color:var(--ink-soft);font-size:14px;margin-top:4px;line-height:1.5}
+
+/* ============================================================ PROOF */
+.stat-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--hair);border:1px solid var(--hair);border-radius:12px;overflow:hidden;margin-top:36px}
+.stat{background:var(--panel);padding:22px 20px}
+.stat .n{font-family:var(--disp);font-size:clamp(26px,3.2vw,36px);font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat .u{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);margin-left:8px;letter-spacing:.02em}
+.stat .l{font-size:13.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5}
+.stat-src{margin-top:16px;font-size:13px;color:var(--muted);max-width:70ch;line-height:1.55}
+.stat-src code{font-size:12px;background:var(--panel);border:1px solid var(--hair);padding:1px 5px;border-radius:5px}
+.term{margin-top:34px;background:var(--code-bg);border-radius:12px;overflow:hidden;border:1px solid var(--code-hair)}
+.term-head{padding:10px 16px;border-bottom:1px solid var(--code-hair);font-family:var(--mono);font-size:12px;color:var(--code-dim)}
+.term pre{margin:0;padding:18px 16px;overflow-x:auto;font-size:12.5px;line-height:1.7;color:var(--code-ink)}
+.term .brk{color:#F08C9C;font-weight:600}
+.term .ok{color:#9BD88A}
+.term .dim{color:var(--code-dim)}
+.term .tag{color:#82AAFF}
+
+/* ============================================================ LIMITS */
+.limits{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:18px;margin-top:36px}
+.limit{border:1px solid var(--hair);border-left:3px solid var(--hair-strong);border-radius:0 10px 10px 0;padding:18px 20px;background:var(--panel)}
+.limit .no{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.limit h4{margin-top:9px;font-size:16.5px;font-weight:600;letter-spacing:-.015em}
+.limit p{margin-top:8px;font-size:13.5px;color:var(--ink-soft);line-height:1.55}
+.limit code{font-size:12.5px;background:var(--paper);border:1px solid var(--hair);padding:1px 5px;border-radius:5px}
+
+/* ============================================================ QUICKSTART */
+.steps{counter-reset:s;display:flex;flex-direction:column;gap:16px;margin-top:34px}
+.step{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start}
+.step .n{counter-increment:s;font-family:var(--mono);font-size:12px;color:var(--muted);border:1px solid var(--hair-strong);width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:none}
+.step .n::before{content:counter(s)}
+.step .t{font-size:14.5px;color:var(--ink-soft);padding-top:3px}
+.step .t b{display:block;color:var(--ink);font-size:15px;margin-bottom:6px}
+.step pre.code{margin-top:10px;font-size:12.5px}
+
+/* ============================================================ DOCS + FOOT */
+.doc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px;margin-top:34px}
+.doc{border:1px solid var(--hair);border-radius:10px;padding:16px 18px;background:var(--panel);transition:.15s}
+.doc:hover{border-color:var(--hair-strong);transform:translateY(-1px)}
+.doc b{font-family:var(--mono);font-size:13px}
+.doc p{font-size:13px;color:var(--ink-soft);margin-top:7px;line-height:1.5}
+footer{border-top:1px solid var(--hair);padding-block:42px;color:var(--muted);font-size:13.5px}
+.foot-in{display:flex;gap:24px;flex-wrap:wrap;align-items:center;max-width:var(--maxw);margin:0 auto;padding-inline:24px}
+.foot-in .sp{margin-left:auto}
+@media(max-width:700px){.foot-in .sp{margin-left:0}}
+.foot-links{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px}
+.foot-links a:hover{color:var(--ink)}
+</style>
+<!--ARTIFACT-KEEP-END-->
+</head>
+<body>
+<!--ARTIFACT-BODY-START-->
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top">
+      <svg width="17" height="17" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l10.4 18.5H5.6z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/></svg>
+      facet
+    </a>
+    <nav class="nav-links">
+      <a href="#drift">The problem</a>
+      <a href="#facets">Facets</a>
+      <a href="#traits">Traits</a>
+      <a href="#plugins">Plugins</a>
+      <a href="#proof">Proof</a>
+      <a href="#limits">Limits</a>
+      <a href="#docs">Docs</a>
+    </nav>
+    <a class="ghlink" href="https://github.com/sys13/omniface" target="_blank" rel="noreferrer noopener">GitHub&nbsp;↗</a>
+    <button type="button" class="tbtn" id="theme" aria-label="Toggle colour theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- =================================================== HERO -->
+<section class="hero">
+  <div class="wrap">
+    <h1>Define the operation once.<em>Prove every interface agrees.</em></h1>
+
+    <p class="hero-what">facet is a TypeScript framework where your REST API, TypeScript SDK, CLI and
+    MCP server are all <em style="font-style:italic">facets</em> of one protocol-neutral definition.
+    Auth, rate limits, idempotency, error shapes and pagination run in a single pipeline behind all
+    four — so a new interface cannot quietly skip them, and no two can drift apart.</p>
+
+    <p class="hero-sub">The definition writes the tests as well. The example app's <b>ten
+    operations</b> become <b>44 conformance cases</b> that call each op on every interface it reaches
+    and fail if any two disagree — nobody typed one of them. The full suite is <b>425 tests</b>,
+    green on 19 September 2026.</p>
+
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#facets">See one op on four facets →</a>
+      <a class="btn btn-ghost" href="#proof">Read the proof →</a>
+    </div>
+
+    <div class="hero-cta" style="margin-top:12px">
+      <span class="install"><span class="dl">$</span> pnpm install &amp;&amp; pnpm smoke <span class="cp" data-copy="pnpm install &amp;&amp; pnpm smoke">copy</span></span>
+    </div>
+
+    <p class="maturity"><b>Early MVP, and not on npm.</b> The name <code>facet</code> belongs to an
+    unrelated package and the <code>@facet</code> scope is unclaimed, so there is no
+    <code>npm&nbsp;install&nbsp;facet</code> to give you yet. The packages build to ESM with type
+    declarations and install from a tarball like any other; <code>pnpm smoke</code> runs the
+    quickstart from a fresh install of the packed packages on Node 20, 22, 24 and Bun.</p>
+
+    <!-- The hero is the product's most characteristic moment: `omniface inspect`
+         showing one operation rendered by every facet at once. The output below
+         is verbatim from `omniface inspect src/app.ts tasks.complete` in
+         examples/tasks — not a mock-up of it. -->
+    <div class="prism">
+      <div class="prism-head">
+        <span class="dl" style="color:var(--muted)">$</span>
+        <span class="cmd">omniface inspect src/app.ts tasks.complete</span>
+        <span style="margin-left:auto">traits: idempotent, scope&nbsp;tasks:write</span>
+      </div>
+      <div class="prism-body">
+        <div class="def">
+          <div class="def-label">The definition · four lines</div>
+<pre class="code"><span class="c">// examples/tasks/src/app.ts</span>
+complete: f
+  .<span class="f">op</span>({ description: <span class="s">'Mark a task done'</span>,
+        input: TaskId, output: Task,
+        errors: [<span class="s">'not_found'</span>] })
+  .<span class="f">traits</span>({ idempotent: <span class="k">true</span>,
+           scope: <span class="s">'tasks:write'</span> })
+  .<span class="f">handle</span>(({ input }) =&gt; {
+    <span class="k">const</span> task = { ...find(input.id), done: <span class="k">true</span> }
+    tasks.set(task.id, task)
+    <span class="k">return</span> task
+  })</pre>
+        </div>
+
+        <div class="beams">
+          <svg viewBox="0 0 180 230" aria-hidden="true">
+            <path class="beam" style="animation-delay:.15s" stroke="var(--rest)" d="M4 115 C70 115, 86 34, 176 30"/>
+            <path class="beam" style="animation-delay:.3s"  stroke="var(--sdk)"  d="M4 115 C70 115, 86 88, 176 86"/>
+            <path class="beam" style="animation-delay:.45s" stroke="var(--cli)"  d="M4 115 C70 115, 86 142, 176 144"/>
+            <path class="beam" style="animation-delay:.6s"  stroke="var(--mcp)"  d="M4 115 C70 115, 86 196, 176 200"/>
+            <path d="M62 91l24 24-24 24z" fill="none" stroke="var(--hair-strong)" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="outs">
+          <div class="out-label">What every interface makes of it</div>
+          <details class="out rest" open>
+            <summary><span class="dot"></span>REST<span class="hint">POST /tasks/{id}/complete</span></summary>
+            <div class="body"><pre class="code">curl -X POST http://localhost:3000/tasks/task_1/complete \
+  -H <span class="s">"Authorization: Bearer $TASKS_API_KEY"</span> \
+  -H <span class="s">'Content-Type: application/json'</span></pre></div>
+          </details>
+          <details class="out sdk">
+            <summary><span class="dot"></span>SDK<span class="hint">client.tasks.complete()</span></summary>
+            <div class="body"><pre class="code"><span class="k">const</span> result = <span class="k">await</span> client.tasks.<span class="f">complete</span>({
+  <span class="s">"id"</span>: <span class="s">"task_1"</span>
+})</pre></div>
+          </details>
+          <details class="out cli">
+            <summary><span class="dot"></span>CLI<span class="hint">tasks complete &lt;id&gt;</span></summary>
+            <div class="body"><pre class="code">tasks tasks complete task_1</pre></div>
+          </details>
+          <details class="out mcp">
+            <summary><span class="dot"></span>MCP<span class="hint">tool tasks_complete</span></summary>
+            <div class="body"><pre class="code">{
+  <span class="s">"name"</span>: <span class="s">"tasks_complete"</span>,
+  <span class="s">"description"</span>: <span class="s">"Mark a task done"</span>,
+  <span class="s">"inputSchema"</span>: {
+    <span class="s">"type"</span>: <span class="s">"object"</span>,
+    <span class="s">"properties"</span>: { <span class="s">"id"</span>: {
+      <span class="s">"type"</span>: <span class="s">"string"</span>, <span class="s">"minLength"</span>: 1,
+      <span class="s">"x-omniface-scalar"</span>: <span class="s">"id"</span>,
+      <span class="s">"examples"</span>: [<span class="s">"task_1"</span>] } },
+    <span class="s">"required"</span>: [<span class="s">"id"</span>],
+    <span class="s">"x-omniface-name"</span>: <span class="s">"TaskId"</span>
+  }<span class="c">, … outputSchema, annotations</span>
+}</pre></div>
+          </details>
+        </div>
+      </div>
+      <div class="prism-foot">Nothing above the fold was hand-written per interface. The route, the
+      method, the SDK method name, the CLI command and the tool name all come from the op id and its
+      traits — and every one of them can be overridden with a typed override when a convention is
+      wrong.</div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== DRIFT -->
+<section class="section" id="drift">
+  <div class="wrap">
+    <span class="eyebrow">The problem · five copies of one contract</span>
+    <h2 class="sec-title">The interfaces agree, right up until the day they don't.</h2>
+    <p class="sec-lede">An app that wants to be reachable by people, scripts, services and agents
+    ends up hand-building the same contract five times: a REST API, an SDK per language, a CLI, an
+    MCP server, maybe webhooks. Each copy re-implements auth, rate limits, error shapes and
+    pagination slightly differently. None of that is hard. It is just five places to change, and
+    four of them are where a fix goes missing.</p>
+    <p class="sec-lede">Here is what you would reach for instead, what each one is genuinely good
+    at, and where facet's mechanism differs. Nothing in this table rests on a competitor lacking
+    something — it is a difference of shape, and those hold up.</p>
+
+    <div class="tbl-scroll">
+      <table class="cmp">
+        <thead><tr><th>You'd otherwise…</th><th>What it's good at</th><th>Where the shape differs</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Hand-build each interface</td>
+            <td>Total control, no abstraction to learn, and the fastest possible first endpoint.</td>
+            <td>One definition, four projections, and a generated suite that fails when any two of them answer differently.</td>
+          </tr>
+          <tr>
+            <td>Generate SDKs from OpenAPI<br /><span style="color:var(--muted);font-weight:400;font-size:13px">Stainless · Speakeasy · Fern</span></td>
+            <td>Excellent, idiomatic SDKs in many languages, from a document you already publish.</td>
+            <td>The core here is operations, not endpoints — so REST is one projection among four rather than the source every other interface inherits its shape from.</td>
+          </tr>
+          <tr>
+            <td>A typed RPC runtime<br /><span style="color:var(--muted);font-weight:400;font-size:13px">tRPC · oRPC</span></td>
+            <td>A superb runtime with end-to-end inference and almost no ceremony.</td>
+            <td>The same runtime-first stance, projected onto four interfaces at once, with cross-cutting concerns as plugins in one pipeline instead of per-interface middleware.</td>
+          </tr>
+          <tr>
+            <td>An interface definition language<br /><span style="color:var(--muted);font-weight:400;font-size:13px">Smithy · TypeSpec</span></td>
+            <td>One spec, many emitters, and a mature model that has survived very large APIs.</td>
+            <td>The spec is a typed TypeScript value, not a separate language: the server interprets it at runtime, and codegen is reserved for things that run elsewhere — SDKs, the CLI, OpenAPI, docs.</td>
+          </tr>
+          <tr>
+            <td>A plugin-shaped auth library<br /><span style="color:var(--muted);font-weight:400;font-size:13px">Better Auth</span></td>
+            <td>The right plugin model, and the reason facet's looks the way it does.</td>
+            <td>The same model widened past one concern: logging, API keys, scopes, rate limits, idempotency, audit and telemetry are all plugins in the same pipeline.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== FACETS -->
+<section class="section" id="facets">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <span class="eyebrow">The shape · four layers, no YAML</span>
+        <h2 class="sec-title">Types, operations, facets, plugins.</h2>
+        <p class="sec-lede">Everything is code. There is no separate IDL and no YAML — the spec is a
+        typed TypeScript value, and <code>openapi.json</code> is an output. A typo in a facet
+        override fails <code>tsc</code>, not a linter at runtime.</p>
+        <ul class="rule-list">
+          <li><span class="mk">types</span><div><b>Fields, once</b><p>Standard Schema underneath — Zod, Valibot, ArkType — with facet traits layered on top. Field traits like <code>pii</code> and <code>internal</code> survive <code>.pick()</code>, <code>.extend()</code> and <code>.nullable()</code>.</p></div></li>
+          <li><span class="mk">ops</span><div><b>Verbs over types</b><p>Protocol-neutral. Not endpoints, not tools. If REST shapes the core, every other facet inherits REST's shape — so it doesn't.</p></div></li>
+          <li><span class="mk">facets</span><div><b>Per-interface views</b><p>Opt in per interface. Conventions first: <code>tasks.complete</code> becomes <code>POST /tasks/{id}/complete</code>, <code>tasks complete &lt;id&gt;</code>, <code>tasks_complete</code> and <code>client.tasks.complete()</code>. Typed overrides second, and rare on purpose.</p></div></li>
+          <li><span class="mk">plugins</span><div><b>Cross-cutting concerns</b><p>Schema, context, hooks, ops and per-facet adapters. One concern, one plugin, four interfaces.</p></div></li>
+        </ul>
+      </div>
+      <div>
+        <div class="out-label" style="margin-bottom:12px">The whole app, in one file</div>
+<pre class="code"><span class="k">import</span> { facet } <span class="k">from</span> <span class="s">'omniface'</span>
+<span class="k">import</span> { apiKeys, logging, rateLimit, scopes } <span class="k">from</span> <span class="s">'omniface/plugins'</span>
+<span class="k">import</span> { t } <span class="k">from</span> <span class="s">'omniface/zod'</span>
+
+<span class="k">const</span> Task = t.<span class="f">named</span>(<span class="s">'Task'</span>, z.<span class="f">object</span>({
+  id: t.<span class="f">id</span>(),
+  title: z.<span class="f">string</span>().<span class="f">min</span>(1),
+  ownerEmail: <span class="f">t</span>(z.<span class="f">email</span>(), { pii: <span class="k">true</span> }),
+}))
+
+<span class="k">const</span> f = <span class="f">facet</span>({ plugins: [
+  <span class="f">logging</span>(), <span class="f">apiKeys</span>({ keys }), <span class="f">scopes</span>(),
+  <span class="f">rateLimit</span>({ limit: <span class="s">'100/min'</span> }),
+] })
+
+<span class="k">export default</span> f.<span class="f">app</span>({
+  name: <span class="s">'acme'</span>,
+  ops: {
+    tasks: {
+      create: f
+        .<span class="f">op</span>({ input: Task.<span class="f">pick</span>({ title: <span class="k">true</span> }), output: Task })
+        .<span class="f">traits</span>({ scope: <span class="s">'tasks:write'</span> })
+        .<span class="f">handle</span>(({ input, ctx }) =&gt; {
+          ctx.<span class="f">log</span>(<span class="s">'creating task'</span>) <span class="c">// typed: from logging()</span>
+          <span class="k">return</span> db.tasks.<span class="f">insert</span>(input)
+        }),
+    },
+  },
+  facets: {
+    rest: <span class="k">true</span>,
+    sdk: <span class="k">true</span>,
+    <span class="c">// a typo in the op id below fails tsc</span>
+    cli: { ops: { <span class="s">'tasks.create'</span>: { args: [<span class="s">'title'</span>] } } },
+    mcp: <span class="k">true</span>,
+  },
+})</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== TRAITS -->
+<section class="section" id="traits">
+  <div class="wrap">
+    <span class="eyebrow">Traits · intent in, behaviour out</span>
+    <h2 class="sec-title">One word on the op. Five things downstream, and one rule behind them.</h2>
+    <p class="sec-lede">A trait carries intent; each facet decides how to present it. The important
+    half is the last card: the behaviour itself is written once, in the pipeline, where every
+    interface runs it. <code>idempotent: true</code> was advertised and unenforced once — now one
+    plugin fills the pipeline's idempotency stage and all four facets inherit it.</p>
+
+    <div class="fan">
+      <div class="fan-item r"><div class="who"><span class="dot"></span>REST</div><code>Idempotency-Key: &lt;key&gt;</code><p>A request header, the way every API you already call does it.</p></div>
+      <div class="fan-item s"><div class="who"><span class="dot"></span>SDK</div><code>one key per logical call</code><p>Minted automatically and reused across the client's own retries.</p></div>
+      <div class="fan-item c"><div class="who"><span class="dot"></span>CLI</div><code>--idempotency-key &lt;key&gt;</code><p>To pin one key across separate runs of a script.</p></div>
+      <div class="fan-item m"><div class="who"><span class="dot"></span>MCP</div><code>_meta["facet/idempotency-key"]</code><p>In the tool call's metadata, plus the matching tool hint for the model.</p></div>
+      <div class="fan-item p"><div class="who"><span class="dot"></span>The pipeline</div><code>fingerprint(validated input)</code><p>The key is scoped to its op and fingerprinted over the <em>validated</em> input, so the same logical call hashes the same whichever facet it arrived on. Reusing a key with different input is a <code>conflict</code>. A failed call leaves no record, so only successes replay.</p></div>
+    </div>
+
+    <p class="sec-lede" style="margin-top:28px">The other traits work the same way. <code>destructive</code>
+    makes the CLI confirm before running. <code>readonly</code> makes the conformance suite demand
+    that all four facets return the <em>same value</em>, not merely the same shape. <code>scope</code>
+    makes every facet refuse an anonymous caller — and if an op declares a scope that no installed
+    plugin enforces, the app refuses to start rather than advertising a guarantee it isn't keeping.</p>
+  </div>
+</section>
+
+<!-- =================================================== PLUGINS -->
+<section class="section" id="plugins">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <span class="eyebrow">Plugins · one pipeline, no side doors</span>
+        <h2 class="sec-title">A new facet can't bypass auth, because facets don't decide.</h2>
+        <p class="sec-lede">Concerns run in the operation pipeline, not in the interface. Eight
+        plugins ship today — <code>logging</code>, <code>apiKeys</code>, <code>auth</code>,
+        <code>scopes</code>, <code>rateLimit</code>, <code>idempotency</code>, <code>audit</code>
+        and <code>otel</code> — and adding <code>rateLimit()</code> changes all four interfaces at
+        once, which is asserted by a test rather than assumed.</p>
+        <p class="sec-lede">A plugin reaches an interface through exactly one slot:
+        <code>adapters</code>. It can find a credential, attribute a caller, add namespaced routes,
+        commands, flags and options, and decorate an answer. It is never handed an invocation, so it
+        can never decide whether an operation runs. Plugin routes live under <code>/_&lt;plugin&gt;</code>,
+        so a plugin cannot shadow an op's route; a contributed CLI command is an alias for an op,
+        not a side door around one; and a flag that would shadow a built-in one is a startup error.</p>
+        <p class="sec-lede">Identity works the same way. One <code>AuthAdapter</code> contract fills
+        the pipeline's authenticate stage for every facet at once, with API keys, JWT (issuer and
+        JWKS, verified with WebCrypto), Better Auth, Clerk and WorkOS implementations that pull in
+        no provider SDK. Several run side by side; each declines what is not its own, so an API key,
+        a browser session and a machine JWT can live on one app. A credential that <em>is</em> an
+        adapter's shape and fails verification is rejected there and then — a forged token never
+        falls through and lands as anonymous.</p>
+      </div>
+      <div>
+        <div class="out-label" style="margin-bottom:12px">The adapters slot · presentation, never decision</div>
+<pre class="code"><span class="f">definePlugin</span>({
+  name: <span class="s">'sessions'</span>,
+  <span class="c">// the decision: every facet, once</span>
+  hooks: { authenticate: verifySession },
+  <span class="c">// the presentation: per facet, never a decision</span>
+  adapters: {
+    rest: {
+      credential: (request) =&gt; <span class="f">cookieToken</span>(request),
+      routes: [{ method: <span class="s">'POST'</span>, path: <span class="s">'/login'</span>,
+                 handler: login }], <span class="c">// → /_sessions/login</span>
+      securitySchemes: { sessionCookie: {
+        type: <span class="s">'apiKey'</span>, in: <span class="s">'cookie'</span>, name: <span class="s">'session'</span> } },
+    },
+    mcp: { instructions: <span class="s">'Log in first.'</span> },
+    cli: { flags: [{ name: <span class="s">'session'</span>, credential: <span class="k">true</span>,
+                     env: <span class="s">'ACME_SESSION'</span> }] },
+    sdk: { options: [{ name: <span class="s">'sessionToken'</span>,
+                       credential: <span class="k">true</span> }] },
+  },
+})</pre>
+        <p class="sec-lede" style="font-size:14px;margin-top:16px">The CLI and the SDK run in another
+        process, so what a plugin declares for them travels in the manifest.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== PROOF -->
+<section class="section" id="proof">
+  <div class="wrap">
+    <span class="eyebrow">Proof · generated, not asserted</span>
+    <h2 class="sec-title">The definition writes the tests that check the definition.</h2>
+    <p class="sec-lede">"Every interface agrees" is the whole claim, so it is the thing that has to
+    be mechanically checked rather than believed. <code>conformanceCases()</code> reads the
+    definition and emits the suite: for every op, on every facet it reaches, a contract check —
+    projection, bindings, advertised fields, name collisions, no internal fields leaking — plus the
+    call-based checks its traits imply. Adding an op adds its cases. You never write one.</p>
+
+    <div class="stat-strip">
+      <div class="stat"><div class="n">10<span class="u">ops</span></div><div class="l">In the example app, across four facets — the only input the author gives the suite is one valid write payload and the data a read expects</div></div>
+      <div class="stat"><div class="n">44<span class="u">cases</span></div><div class="l">Generated from those ten ops and their traits, and passing: <code>omniface conformance src/app.ts</code></div></div>
+      <div class="stat"><div class="n">425<span class="u">tests</span></div><div class="l">The full suite across 25 files, green on 19 September 2026 — <code>pnpm check</code> builds, typechecks and runs them in about three seconds</div></div>
+      <div class="stat"><div class="n">4<span class="u">packages</span></div><div class="l">ESM with declarations and subpath exports, smoke-tested from a fresh tarball install on Node 20, 22, 24 and Bun</div></div>
+    </div>
+    <p class="stat-src">Every figure on this page came out of a command run in this repository on
+    19 September 2026: <code>pnpm check</code> for the test count, <code>omniface conformance
+    src/app.ts</code> for the case count, <code>omniface build</code> for the op count. If you change
+    the example app, those numbers move — which is the point, and also why none of them is typed
+    into the copy from memory.</p>
+
+    <h3 class="sec-title" style="font-size:clamp(21px,2.4vw,27px);margin-top:56px;max-width:30ch">And "is this breaking?" is a command, answered once per facet.</h3>
+    <p class="sec-lede">A breaking change is rarely breaking everywhere. Renaming an output type
+    breaks the SDK and nothing else. Marking an op <code>destructive</code> breaks unattended CLI
+    scripts and nothing else. <code>omniface diff</code> compares two manifests and says which, and
+    <code>--strict</code> turns a breaking change into an exit code. The example app's CI is
+    <code>omniface lint &amp;&amp; omniface conformance --strict</code>.</p>
+
+    <div class="term">
+      <div class="term-head">$ omniface diff .omniface/manifest.json src/app.ts <span style="opacity:.6">— after adding destructive: true to tasks.complete</span></div>
+<pre>tasks 0.1.0 → tasks 0.1.0
+
+<span class="brk">BREAKING (1)</span>
+  <span class="tag">cli</span>  tasks.complete is now destructive.  <span class="dim">[trait-destructive]</span>
+       <span class="dim">The CLI prompts before running it; unattended scripts need --yes.</span>
+
+Breaks <span class="tag">cli</span>, not rest, mcp and sdk.
+Suggested version bump: minor <span class="dim">— pre-1.0, minor is the breaking bump.</span></pre>
+    </div>
+    <p class="stat-src">Verbatim output, produced on 19 September 2026 by changing one trait in
+    <code>examples/tasks</code> and running the command.</p>
+  </div>
+</section>
+
+<!-- =================================================== QUICKSTART -->
+<section class="section" id="quickstart">
+  <div class="wrap">
+    <span class="eyebrow">Quickstart · definition to four running interfaces</span>
+    <h2 class="sec-title">Seven commands, and none of them is a code generator you have to babysit.</h2>
+    <p class="sec-lede">A <code>.ts</code> entry needs a runtime that strips types — Node 22.18+,
+    Node 24 or Bun. On Node 20 the same commands point at compiled JavaScript.</p>
+
+    <div class="steps">
+      <div class="step"><span class="n"></span><div class="t"><b>Run all four interfaces at once</b>REST on :3000, MCP at <code>/mcp</code>, and an inspector page at <code>/_omniface</code>.<pre class="code">npx omniface dev app.ts</pre></div></div>
+      <div class="step"><span class="n"></span><div class="t"><b>Look at one op on every facet</b>The command from the top of this page.<pre class="code">npx omniface inspect app.ts tasks.create</pre></div></div>
+      <div class="step"><span class="n"></span><div class="t"><b>Build the outputs</b><code>.omniface/</code> gets a manifest, <code>openapi.json</code>, <code>llms.txt</code> and a CLI — shipped as an engine plus a manifest, not a pile of generated commands.<pre class="code">npx omniface build app.ts
+node .omniface/cli/bin.mjs tasks create "Hello"</pre></div></div>
+      <div class="step"><span class="n"></span><div class="t"><b>Serve it to an agent</b>MCP over stdio, or Streamable HTTP from <code>dev</code>.<pre class="code">npx omniface mcp app.ts</pre></div></div>
+      <div class="step"><span class="n"></span><div class="t"><b>Keep the definition honest</b><code>--fix</code> writes the <code>t.named()</code> the named-type rules ask for, then re-lints in a fresh process to check its own edit — an edit that doesn't load, or doesn't resolve the finding it was for, is restored.<pre class="code">npx omniface lint app.ts --fix</pre></div></div>
+      <div class="step"><span class="n"></span><div class="t"><b>Prove the facets still agree, and see what broke</b>With no setup at all, <code>conformance</code> runs the checks that read the manifest; a <code>conformance.fixtures.ts</code> beside the entry unlocks the rest.<pre class="code">npx omniface conformance app.ts
+npx omniface diff .omniface/manifest.json app.ts</pre></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== LIMITS -->
+<section class="section" id="limits">
+  <div class="wrap">
+    <span class="eyebrow">Scope · what this is not, today</span>
+    <h2 class="sec-title">The honest boundaries.</h2>
+    <p class="sec-lede">Every one of these is a real limit right now, not a coming-soon. If one of
+    them is your requirement, this is the wrong tool and you should find that out from this page
+    rather than from the install.</p>
+
+    <div class="limits">
+      <div class="limit"><span class="no">not yet</span><h4>Not on npm</h4><p>The name <code>facet</code> belongs to an unrelated package and the <code>@facet</code> scope is unclaimed. The release pipeline exists — changesets, provenance, tags — with nothing published through it.</p></div>
+      <div class="limit"><span class="no">not proven</span><h4>No second language, demonstrated</h4><p><code>omniface build</code> writes a publishable TypeScript package to <code>.omniface/sdk/</code>, and <code>examples/tasks/sdks/</code> carries starting configurations for Stainless, Fern, Speakeasy and openapi-generator. None of them runs in CI, so agreement in a second language is argued rather than demonstrated.</p></div>
+      <div class="limit"><span class="no">not yet</span><h4>Auth presentation isn't wired</h4><p>The <code>adapters</code> slot it needs now exists, but the SDK constructor, a CLI <code>login</code> device flow and MCP OAuth 2.1 are not connected to it.</p></div>
+      <div class="limit"><span class="no">not this</span><h4>Request/response only</h4><p>No streaming, no long-running operations, no webhooks and no events. Every op is one call in, one answer out.</p></div>
+      <div class="limit"><span class="no">not this</span><h4>TypeScript, on a server</h4><p>Definitions are TypeScript and the runtime interprets them in Node or Bun. Other languages are somebody else’s generator reading the OpenAPI document — a deliberate split, not a stopgap.</p></div>
+      <div class="limit"><span class="no">not proven</span><h4>No comparison benchmark</h4><p>There is no control arm — no "same API, hand-built, measured" run — so there is no <em>N× less code</em> or <em>N× faster</em> claim anywhere on this page. The numbers here are all about this repository's own test suite.</p></div>
+    </div>
+
+    <p class="sec-lede" style="margin-top:32px">One more boundary worth stating plainly: this is an
+    early MVP. Core, REST, MCP, the TypeScript SDK, the CLI engine, eight plugins and five auth
+    adapters work end to end and are tested that way, but the vocabulary and the CLI can still
+    change. What the tests hold stable is the part you would actually notice — that the four
+    interfaces agree, and that the conformance suite fails when they stop agreeing.</p>
+  </div>
+</section>
+
+<!-- =================================================== DOCS -->
+<section class="section" id="docs">
+  <div class="wrap">
+    <span class="eyebrow">Documentation</span>
+    <h2 class="sec-title">Read the framework, not just the pitch.</h2>
+    <div class="doc-grid">
+      <a class="doc" href="../docs/PLUGINS.md"><b>PLUGINS.md</b><p>Writing a plugin: the slots, the per-facet <code>adapters</code> rules, and the conformance kit that runs it on all four facets.</p></a>
+      <a class="doc" href="../docs/API.md"><b>API.md</b><p>The public API surface, package by package, and what is deliberately internal.</p></a>
+      <a class="doc" href="../docs/SCHEMA.md"><b>SCHEMA.md</b><p>Standard Schema as the base, facet's trait layer on top, all of it in code.</p></a>
+      <a class="doc" href="../docs/DX.md"><b>DX.md</b><p>Developer experience — what is common across facets, and what genuinely differs.</p></a>
+      <a class="doc" href="../docs/RUNTIMES.md"><b>RUNTIMES.md</b><p>Which Node versions and which other runtimes are supported, and what CI proves about each.</p></a>
+      <a class="doc" href="../docs/CRITERIA.md"><b>CRITERIA.md</b><p>The rubric for deciding whether a feature is in — and <a href="../docs/BACKLOG.md">BACKLOG.md</a> for everything that isn't yet.</p></a>
+    </div>
+  </div>
+</section>
+
+<!-- =================================================== CTA -->
+<section class="section" id="start" style="border-bottom:none">
+  <div class="wrap" style="text-align:center">
+    <span class="eyebrow" style="justify-content:center">Get started</span>
+    <h2 class="sec-title" style="margin:16px auto 0;max-width:20ch">Define one operation. Call it four ways.</h2>
+    <p class="sec-lede" style="margin:18px auto 0">Clone the repo, run the checks, then open
+    <code>examples/tasks</code> and add an op. The conformance suite will have written its cases
+    before you have finished the handler.</p>
+    <div class="hero-cta" style="justify-content:center;margin-top:28px">
+      <span class="install"><span class="dl">$</span> pnpm install &amp;&amp; pnpm check <span class="cp" data-copy="pnpm install &amp;&amp; pnpm check">copy</span></span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="foot-in">
+    <span>facet — one definition, every interface.</span>
+    <nav class="foot-links sp">
+      <a href="#facets">Facets</a>
+      <a href="#plugins">Plugins</a>
+      <a href="#proof">Proof</a>
+      <a href="#limits">Limits</a>
+      <a href="../docs/RELEASING.md">Releasing</a>
+      <a href="https://github.com/sys13/omniface" target="_blank" rel="noreferrer noopener">GitHub ↗</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var root = document.documentElement
+  var btn = document.getElementById('theme')
+  try {
+    var saved = localStorage.getItem('facet-theme')
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved)
+  } catch (e) {}
+  btn.addEventListener('click', function () {
+    var dark = getComputedStyle(root).getPropertyValue('--paper').trim().toLowerCase().indexOf('#0b0e13') === 0
+    var next = dark ? 'light' : 'dark'
+    root.setAttribute('data-theme', next)
+    try { localStorage.setItem('facet-theme', next) } catch (e) {}
+  })
+
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('.cp')
+    if (!el) return
+    var text = el.getAttribute('data-copy')
+    if (!navigator.clipboard) return
+    navigator.clipboard.writeText(text).then(function () {
+      var was = el.textContent
+      el.textContent = 'copied'
+      setTimeout(function () { el.textContent = was }, 1400)
+    }).catch(function () {})
+  })
+})()
+</script>
+<!--ARTIFACT-BODY-END-->
+</body>
+</html>

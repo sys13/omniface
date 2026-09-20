@@ -1,0 +1,12 @@
+{
+  "name": "example-plugin-template",
+  "private": true,
+  "type": "module",
+  "description": "A copy-me starting point for a facet plugin: every slot filled, conformance wired up.",
+  "dependencies": {
+    "omniface": "workspace:*"
+  },
+  "devDependencies": {
+    "@omniface/testing": "workspace:*"
+  }
+}
