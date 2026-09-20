@@ -120,7 +120,8 @@ manifest; everything it does lives here.
 `createHarness`, `Harness`, `HarnessOptions`, `CallOptions`, `Channel`, `CHANNELS`, `Outcome`,
 `outcomesAgree` — drive one op on every facet and compare. `conformanceCases`, `runConformance`,
 `ConformanceOptions`, `OpConformanceOptions`, `ConformanceCase`, `CaseResult`, `Check`, `CHECKS` —
-the suite generated from the definition. `conformanceCoverage`, `ConformanceCoverage`, `OpCoverage`
+the suite generated from the definition. `screenProblems` — what the `presentation` check reads out
+of a rendered screen and diffs against the REST payload, exported so a facet of your own can use it. `conformanceCoverage`, `ConformanceCoverage`, `OpCoverage`
 — which cases an app gets and which ones a hand-written input would add, since the two inputs the
 definition cannot supply are also the only way the suite silently shrinks. `apiKeyStoreCases`, `runApiKeyStoreConformance`,
 `ApiKeyStoreCaseOptions`, `StoreCase` — the same idea for an extension point rather than a facet:

@@ -572,7 +572,7 @@ The browser's agent — [W1–W7](proposals/webmcp.md) relocated:
 | 12.7 | Advertise-and-refuse from one declaration: what a browser-agent caller may do, stated once and read both by the registration filter and by an `authorize` hook, so the in-page filter is a presentation detail and never the enforcement | M | want | **done** — W4 |
 | 12.8 | Attenuated agent credential: a short-lived, scope-narrowed token minted for in-page agent use and carried by the caller, instead of handing the agent the ambient session cookie and with it the user's whole authority | L | want | **done** — W5; 2.6 turned out not to be needed |
 | 12.9 | Untrusted-output trait → `untrustedContentHint`, and what that same trait should mean for the MCP facet, which has had the problem all along and has been living with it | S | want | **done** — W7 |
-| 12.10 | Conformance for both halves: an op not advertised is refused when called anyway; `internal` never renders and never registers; redaction matches the other four facets field for field; CSRF defaults hold; a `destructive` op confirms on the page and is annotated for the agent | M | want | **partial** — W6; the refusals hold, the redaction claim does not (#30) |
+| 12.10 | Conformance for both halves: an op not advertised is refused when called anyway; `internal` never renders and never registers; redaction matches the other four facets field for field; CSRF defaults hold; a `destructive` op confirms on the page and is annotated for the agent | M | want | **done** — W6; the `presentation` check reads the screen and diffs it against REST through `presentation.ts` |
 
 **Done when:** the example app's console is generated with nothing hand-written in it, a browser
 agent completes a task through the same ops a human just clicked, and the conformance suite shows
@@ -592,32 +592,34 @@ annotation, a sentence in the tool description saying to treat the output as dat
 generated case against the screens too, plus two the browser half needs — an op the page never
 advertised is refused when called anyway, and a write with no CSRF token is refused.
 
-**12.10 was recorded as done, and it is not — see #30.**
-It claimed redaction matches the other four facets field for field. The generated suite cannot see
-the contents of a screen at all: gutting the table and detail renderers so every screen returns 200
-with no records passes 67 of 67 generated cases. `harness.ts:175` marks every successful web answer
-`presentation: true`, and `outcomesAgree` skips value comparison whenever that flag is set, so a
-generated case proves two things about the web channel — the page succeeded, and its error code
-matches REST's. The reasoning behind the flag is right, because a rendering is not a record, and the
-comment at `harness.ts:18-26` already names the gap it leaves: *"a test that cares what reached the
-page reads the HTML."* No generated test does.
+**12.10 was recorded as done before it was, and the correction is worth keeping.**
+For a while the generated suite could not see the contents of a screen at all: gutting the table and
+detail renderers so every screen returned 200 with no records passed 67 of 67 generated cases. The
+redaction claim was carried by `web-render.test.ts`, which hand-built a `Task` with fields the
+example app did not have and called `renderScreen` directly, bypassing the pipeline — a
+hand-maintained restatement of the trait rules, drifting independently of the app it described, and
+load-bearing for the fifth facet.
 
-What stands in for it is `web-render.test.ts`, which hand-builds a `Task` carrying `apiSecret`
-(`sensitive`) and `ledgerRef` (`internal`) and calls `renderScreen` directly, bypassing the pipeline.
-Those fields are not in the example app: `examples/tasks/src/app.ts` declares `pii` and `internal`
-and no `sensitive` field at all, so the masking rule never executes against the shipped definition.
-A hand-maintained restatement of the trait rules, drifting independently of the app it describes, is
-the thing this project exists to abolish, and it is currently load-bearing for the fifth facet.
+`harness.ts:175` still marks every successful web answer `presentation: true`, and `outcomesAgree`
+still skips value comparison when that flag is set, because a rendering is not a record. The comment
+at `harness.ts:18-26` named the gap that leaves — *"a test that cares what reached the page reads the
+HTML"* — and a generated case now does. The `presentation` check opens the screen, parses the
+rendered field set out of it by `data-field`, asks `presentation.ts` what that op should show, and
+diffs both the field set and the values against what REST answered for the same call: `sensitive`
+masked rather than absent, `pii` in the clear as on every other facet, `deprecated` marked, and no
+field the rules did not list. It reads the same table the renderer renders from, so there is no third
+copy of the rules. The example app now declares a `sensitive` field (`shareToken`), so the masking
+path runs against the shipped definition rather than only a fixture, and the part of
+`web-render.test.ts` the generated case took over is gone.
 
-So the epic's "Done when" is half-met. Conformance does show the web facet *refusing* exactly what
-the other four refuse. It does not show it *agreeing*. Earning the claim means a generated case that
-reads the HTML and compares the rendered fields against the REST payload through `presentFields` —
-the same `presentation.ts` table, not a third reading of it — and a `sensitive` field in the example
-app so the masking path runs somewhere real.
+The mutation is the gate, and it is run rather than described: gutting the two renderers now fails
+four generated cases instead of none. A screen with nothing on it and a record with nothing in it is
+reported as a problem too — a case that proves nothing is the failure mode this whole entry is
+about — which is why the list screens carry a `setup` in the fixtures.
 
-Two things are genuinely fine, and worth not re-deriving later: `stripInternal` runs in the pipeline
-(`app.ts:400`) before any facet, so `internal` leaking is structurally prevented rather than merely
-tested, and the agent-token wiring is correct.
+Two things were fine all along, and are worth not re-deriving later: `stripInternal` runs in the
+pipeline (`app.ts:400`) before any facet, so `internal` leaking is structurally prevented rather than
+merely tested, and the agent-token wiring is correct.
 
 **12.8 is built, and 2.6 turned out not to be in the way.** The proposal read the dependency as
 "minting is a plugin concern needing an `adapters` slot", and 3.1 delivered that slot; what was

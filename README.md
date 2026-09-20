@@ -166,9 +166,11 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   collisions, no internal fields) plus the call-based checks its traits imply — `invalid_input`,
   `anonymous`, `forbidden`, `not_found`, `idempotent`, and value agreement for reads. Adding an op adds
   its cases. `pluginCases(...)` does the same for a plugin, against a sample app on every facet.
-  One exception, and it is written down rather than glossed: **the web facet's generated cases do not
-  read the page.** A screen's answer is compared on success and on error code, never on content, so
-  redaction and field agreement there rest on hand-written tests — see "Not yet" below.
+  The web facet is included on the same terms: a `presentation` case opens the screen, reads the
+  rendered fields out of it, asks the same `presentation.ts` table the renderer renders from what the
+  op should show, and diffs both the field set and the values against what REST answered for the same
+  call — `sensitive` masked rather than absent, `pii` in the clear as elsewhere, `deprecated` marked.
+  Gutting the table and detail renderers fails those cases; it used to pass all of them.
 - **Tooling.** `omniface dev | mcp | inspect | build | lint | conformance | diff`, installed as a real `omniface`
   bin, and an inspector web page. `omniface conformance` runs the generated suite from a terminal or
   CI: with no setup at all it runs the checks that read the manifest, and it runs the rest once a
@@ -204,12 +206,6 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
 - CLI keychain storage and completions; inspector try-it and live trace (backlog E11 — the playground).
 - A web facet: declared ops rendered as screens, and offered to the browser's agent over WebMCP
   (backlog E12). New as of 2026-09-19, and it reverses two recorded decisions — the epic says why.
-- Content conformance for the web facet (backlog 12.10).
-  The screens and the browser agent are built, and the web channel refuses exactly what the other four
-  refuse. What it cannot yet prove is that it *agrees*: `outcomesAgree` skips value comparison for any
-  answer rendered for a person, so gutting the renderers still passes every generated case. Redaction
-  on screen is currently asserted by hand, against a fixture the example app does not match — which is
-  the one place in this repo where the drift this project exists to stop is load-bearing.
 - Streaming and long-running ops, webhooks, events.
 - Nothing is on npm yet: the `omniface` org owns the names, but the first release still has to run.
 

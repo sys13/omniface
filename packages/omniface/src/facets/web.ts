@@ -369,11 +369,18 @@ function control(field: FieldPresentation, schema: JSONSchema | undefined, value
   return `<input ${attrs} type="${type}" value="${escapeHtml(current)}">`
 }
 
+/**
+ * The deprecated marker, on every screen kind rather than only on forms. A person reading a table
+ * or a detail has the same right to know a field is on its way out as one filling in a form, and
+ * the generated web case asserts the mark is there — so it has to be somewhere to assert about.
+ */
+function deprecatedMark(field: FieldPresentation | undefined): string {
+  if (field?.deprecated === undefined) return ''
+  return ` <span class="dep">deprecated${field.deprecated ? `: ${escapeHtml(field.deprecated)}` : ''}</span>`
+}
+
 function labelFor(field: FieldPresentation, error?: string): string {
-  const deprecated =
-    field.deprecated !== undefined
-      ? ` <span class="dep">deprecated${field.deprecated ? `: ${escapeHtml(field.deprecated)}` : ''}</span>`
-      : ''
+  const deprecated = deprecatedMark(field)
   const hint = error
     ? `<span class="hint" style="color:var(--danger)">${escapeHtml(error)}</span>`
     : field.description
@@ -395,7 +402,9 @@ function renderTable(manifest: Manifest, op: ManifestOp, base: string, data: unk
   const detail = manifest.ops.find(
     (o) => o.web?.kind === 'detail' && o.path[0] === op.path[0] && o.web.pathParams.includes('id'),
   )
-  const head = columns.map((c) => `<th scope="col">${escapeHtml(labelOf(op.web!, fields.get(c), c))}</th>`).join('')
+  const head = columns
+    .map((c) => `<th scope="col" data-field="${escapeHtml(c)}">${escapeHtml(labelOf(op.web!, fields.get(c), c))}${deprecatedMark(fields.get(c))}</th>`)
+    .join('')
   const body = items
     .map((item) => {
       const cells = columns.map((c, i) => {
@@ -404,7 +413,7 @@ function renderTable(manifest: Manifest, op: ManifestOp, base: string, data: unk
           i === 0 && detail && item['id'] !== undefined
             ? `<a href="${escapeHtml(screenUrl(base, detail.web!, { id: String(item['id']) }))}">${rendered}</a>`
             : rendered
-        return `<td>${linked}</td>`
+        return `<td data-field="${escapeHtml(c)}">${linked}</td>`
       })
       return `<tr>${cells.join('')}</tr>`
     })
@@ -424,7 +433,10 @@ function renderDetail(op: ManifestOp, data: unknown): string {
   const rows = shown
     .map((name) => {
       const field = known.get(name)
-      return `<dt>${escapeHtml(labelOf(screen, field, name))}</dt><dd>${fieldValue(value[name], field)}</dd>`
+      return (
+        `<dt data-field="${escapeHtml(name)}">${escapeHtml(labelOf(screen, field, name))}${deprecatedMark(field)}</dt>` +
+        `<dd data-field="${escapeHtml(name)}">${fieldValue(value[name], field)}</dd>`
+      )
     })
     .join('')
   return `<dl>${rows}</dl>`

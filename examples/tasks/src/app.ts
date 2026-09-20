@@ -27,6 +27,10 @@ const Task = t.named(
     priority: z.enum(['low', 'normal', 'high']),
     assigneeEmail: t(z.email(), { pii: true, description: 'Who the task is assigned to' }).nullable(),
     internalScore: t(z.number(), { internal: true }),
+    // A secret: anyone holding the link can open the task. Person-facing facets mask it — the CLI
+    // in its tables, the web console behind a deliberate reveal — and the machine-facing ones hand
+    // it over, because a caller that asked for the task asked for its link.
+    shareToken: t(z.string(), { sensitive: true, description: 'Secret share link token' }),
     createdAt: t.datetime(),
   }),
 )
@@ -83,6 +87,7 @@ export function createTasksApp(options: TasksAppOptions = {}) {
 
   const tasks = new Map<string, Task>()
   let seq = 0
+  let shareSeq = 0
   const find = (id: string) => {
     const task = tasks.get(id)
     if (!task) throw errors.notFound(`No task "${id}"`)
@@ -106,6 +111,7 @@ export function createTasksApp(options: TasksAppOptions = {}) {
             priority: input.priority ?? 'normal',
             assigneeEmail: input.assigneeEmail ?? null,
             internalScore: Math.random(),
+            shareToken: `share_${(++shareSeq).toString(36)}${Math.random().toString(36).slice(2, 8)}`,
             createdAt: new Date().toISOString(),
           }
           tasks.set(task.id, task)

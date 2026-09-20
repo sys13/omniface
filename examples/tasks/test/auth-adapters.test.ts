@@ -90,6 +90,13 @@ describe('generated conformance, authenticated by Better Auth', () => {
     ops: {
       'tasks.create': { input: { title: 'Conformance' } },
       'apiKeys.create': { input: { name: 'conformance', scopes: ['tasks:read'] } },
+      // A table screen with nothing on it proves nothing about what reaches the page, and the
+      // `presentation` check says so rather than passing quietly. A session principal starts with
+      // neither a task nor a key of its own, so both lists get a row to render.
+      'tasks.list': { setup: async (h) => void (await h.call('rest', 'tasks.create', { title: 'Seeded' })) },
+      'apiKeys.list': {
+        setup: async (h) => void (await h.call('rest', 'apiKeys.create', { name: 'seeded', scopes: ['tasks:read'] })),
+      },
     },
   })
   for (const c of cases) it(c.name, async () => expect((await c.run()).problems).toEqual([]))

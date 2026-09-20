@@ -18,6 +18,9 @@ export default {
   unprivileged: { apiKey: DEV_KEYS.reader, scopes: ['tasks:read'] },
   ops: {
     'tasks.create': { input: { title: 'Conformance' } },
+    // A table screen with no rows proves nothing about what reaches the page, so the list gets a
+    // row like every other read does. The `presentation` check says so out loud when it does not.
+    'tasks.list': { setup: seedOneTask },
     'tasks.get': { input: { id: 'task_1' }, setup: seedOneTask },
     'tasks.update': { input: { id: 'task_1', title: 'Renamed' }, setup: seedOneTask },
     'tasks.complete': { input: { id: 'task_1' }, setup: seedOneTask },

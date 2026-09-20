@@ -163,6 +163,7 @@ describe('public API surface', () => {
       'OpCoverage', 'Outcome', 'PluginCase', 'PluginConformanceOptions', 'SampleAppOptions', 'StoreCase',
       'apiKeyStoreCases', 'conformanceCases', 'conformanceCoverage', 'createHarness', 'createSampleApp',
       'outcomesAgree', 'pluginCases', 'runApiKeyStoreConformance', 'runConformance', 'runPluginConformance',
+      'screenProblems',
     ],
   }
 

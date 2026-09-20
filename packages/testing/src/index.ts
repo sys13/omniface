@@ -18,6 +18,7 @@ export {
   type ConformanceOptions,
   type OpConformanceOptions,
 } from './conformance.ts'
+export { screenProblems } from './screen.ts'
 export { conformanceCoverage, type ConformanceCoverage, type OpCoverage } from './coverage.ts'
 export {
   pluginCases,

@@ -125,7 +125,7 @@ describe('a table comes from the row schema', () => {
       'apiSecret',
       'ownerEmail',
     ])
-    expect(html).toContain('<th scope="col">Owner email</th>')
+    expect(html).toContain('<th scope="col" data-field="ownerEmail">Owner email</th>')
   })
 
   it('links the first cell of a row to the detail screen', () => {
@@ -142,24 +142,28 @@ describe('a table comes from the row schema', () => {
   })
 })
 
-describe('field traits on screen (12.3)', () => {
+/**
+ * What is left of 12.3 here, and why.
+ *
+ * *Which* fields reach a screen and *what* they say is now a generated case — `presentation` in
+ * `@omniface/testing`, which reads the rendered HTML, asks `presentation.ts` what the op should
+ * show, and diffs both against the REST payload for the same call. It runs against the shipped
+ * example app, where the traits are the ones that actually ship. Asserting the same things again
+ * against the fixture below would be a second copy of the rules, maintained separately from the
+ * app it describes, which is the drift this project exists to stop.
+ *
+ * So this block keeps only the two things the generated case cannot see: the markup a value is
+ * wrapped in (a mask is a mask *with a reveal*, a datetime is a `<time>` the island can rewrite),
+ * and the pure-module contract that the CLI reads the same table.
+ */
+describe('how a value is wrapped (12.3)', () => {
   const detail = renderScreen(manifest, 'tasks.get', { data: row, params: { id: 'task_1' } })
 
-  it('never renders an internal field, on any screen', () => {
-    expect(detail).not.toContain('ledgerRef')
-    expect(detail).not.toContain('Ledger ref')
-    expect(renderScreen(manifest, 'tasks.list', { data: { items: [row] } })).not.toContain('Ledger ref')
-  })
-
-  it('masks a sensitive value behind a deliberate reveal', () => {
+  it('offers a sensitive value behind a deliberate reveal rather than only hiding it', () => {
     expect(detail).toContain(MASK)
     expect(detail).toContain('class="reveal"')
     // The mask is what is on screen; the value is only reachable by asking for it.
     expect(detail).not.toMatch(new RegExp(`>${'sk_live_9'}<`))
-  })
-
-  it('shows pii to the person the pipeline already answered', () => {
-    expect(detail).toContain('sam@example.com')
   })
 
   it('marks a datetime for the island to make relative', () => {

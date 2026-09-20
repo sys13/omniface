@@ -46,9 +46,9 @@ describe('labels', () => {
     const m = manifest({ ops: { 'tasks.list': { title: 'Everything', labels: { title: 'What', done: 'Finished?' } } } })
     expect(screen(m, 'tasks.list').title).toBe('Everything')
     const html = renderScreen(m, 'tasks.list', { data: { items: [row] } })
-    expect(html).toContain('<th scope="col">What</th>')
-    expect(html).toContain('<th scope="col">Finished?</th>')
-    expect(html).not.toContain('<th scope="col">Title</th>')
+    expect(html).toContain('<th scope="col" data-field="title">What</th>')
+    expect(html).toContain('<th scope="col" data-field="done">Finished?</th>')
+    expect(html).not.toContain('>Title</th>')
   })
 
   it('labels a form control too, and still validates against the real field name', () => {
@@ -64,7 +64,7 @@ describe('which fields a screen shows', () => {
     const m = manifest({ ops: { 'tasks.list': { fields: ['title', 'id'] } } })
     expect(screen(m, 'tasks.list').fields).toEqual(['title', 'id'])
     const html = renderScreen(m, 'tasks.list', { data: { items: [row] } })
-    expect(html.indexOf('<th scope="col">Title</th>')).toBeLessThan(html.indexOf('<th scope="col">Id</th>'))
+    expect(html.indexOf('data-field="title">Title</th>')).toBeLessThan(html.indexOf('data-field="id">Id</th>'))
     expect(html).not.toContain('Created at')
   })
 

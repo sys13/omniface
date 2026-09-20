@@ -10,6 +10,7 @@ import {
 } from 'omniface'
 import { hasScope } from 'omniface/plugins'
 import { CHANNELS, createHarness, outcomesAgree, type Channel, type Harness, type Outcome } from './harness.ts'
+import { screenProblems } from './screen.ts'
 
 /**
  * Generated conformance: the cases nobody should have to write by hand.
@@ -33,6 +34,7 @@ export const CHECKS = [
   'agree',
   'agent',
   'csrf',
+  'presentation',
 ] as const
 export type Check = (typeof CHECKS)[number]
 
@@ -402,6 +404,26 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
           if (!outcome.ok) problems.push(`${channel}: ${outcome.code} (${outcome.message})`)
         }
         return { problems, outcomes }
+      })
+    }
+
+    // What reached the page. `outcomesAgree` skips a screen's value on purpose — a rendering is not
+    // a record — so without this the web facet's only generated assertion is that the screen was
+    // not a 500, and a console that renders nothing at all passes. This reads the HTML and asks
+    // `presentation.ts`, the table the renderer itself renders from, what should be on it.
+    if (op.web && (op.web.kind === 'table' || op.web.kind === 'detail') && op.rest && canRunHappyPath) {
+      add('presentation', ['rest', 'web'], async (h) => {
+        if (!(await inputIsValid(template, op.id, sample))) {
+          return { problems: [`no valid input could be synthesized; set ops['${op.id}'].input`] }
+        }
+        const outcomes = await h.callAll(op.id, sample, { apiKey: options.apiKey }, ['rest', 'web'])
+        const problems = outcomesAgree(outcomes, { compareValues: false })
+        for (const [channel, outcome] of Object.entries(outcomes)) {
+          if (!outcome.ok) problems.push(`${channel}: ${outcome.code} (${outcome.message})`)
+        }
+        if (problems.length) return { problems, outcomes }
+        const { html } = (outcomes.web as { ok: true; value: { html: string } }).value
+        return { problems: screenProblems(op, html, (outcomes.rest as { ok: true; value: unknown }).value), outcomes }
       })
     }
   }
