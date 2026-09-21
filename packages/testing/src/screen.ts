@@ -3,6 +3,7 @@ import {
   objectProperties,
   presentFields,
   presentValue,
+  webOf,
   tableColumns,
   type FieldPresentation,
   type JSONSchema,
@@ -136,7 +137,7 @@ function checkDeprecatedMarks(
  */
 export function screenProblems(op: ManifestOp, html: string, restValue: unknown): string[] {
   const problems: string[] = []
-  const kind = op.web?.kind
+  const kind = webOf(op)?.kind
   if (kind !== 'table' && kind !== 'detail') return problems
 
   const schema = kind === 'table' ? rowSchema(op) : op.output
@@ -144,7 +145,7 @@ export function screenProblems(op: ManifestOp, html: string, restValue: unknown)
 
   if (kind === 'detail') {
     const record = (restValue ?? {}) as Record<string, unknown>
-    const expected = op.web!.fields.filter((name) => fields.has(name))
+    const expected = webOf(op)!.fields.filter((name) => fields.has(name))
     const cells = cellsOf(html, 'dd')
     if (!expected.length) return problems
     if (!cells.size && !Object.keys(record).length) {
@@ -167,7 +168,7 @@ export function screenProblems(op: ManifestOp, html: string, restValue: unknown)
     problems.push(`the table shows ${rows.length} row(s), REST returned ${items.length}`)
     return problems
   }
-  const expected = tableColumns(schema, op.output, op.web!.fields)
+  const expected = tableColumns(schema, op.output, webOf(op)!.fields)
   const headers = headersOf(html, 'th')
   const onHead = [...headers.keys()]
   if (JSON.stringify(onHead) !== JSON.stringify(expected)) {

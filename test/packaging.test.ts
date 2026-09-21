@@ -1,13 +1,25 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 // What every published package promises: a build that consumers can resolve, and a public API
 // surface that only changes when someone means it to (docs/API.md).
 
 const ROOT = join(import.meta.dirname, '..')
 const PACKAGES = ['omniface', 'client', 'cli', 'testing'] as const
+
+// Every test in this file reads `dist`, which is the only thing in the suite that comes from a
+// build rather than from the source tree. `pnpm test` builds first; `pnpm test:only` and a bare
+// `vitest run` do not, which is the mode you reach for while iterating. Without the check below
+// an unbuilt tree fails with ENOENT and a stale one fails with a diff of exported names — both
+// read like an API regression, and neither says the build is what is missing.
+const BUILD_HINT = 'Run `pnpm build` and try again.'
+
+beforeAll(() => {
+  const unbuilt = PACKAGES.filter((dir) => !existsSync(join(ROOT, 'packages', dir, 'dist')))
+  if (unbuilt.length) throw new Error(`Not built: ${unbuilt.map((d) => `packages/${d}/dist`).join(', ')}. ${BUILD_HINT}`)
+})
 
 type PackageJson = {
   name: string
@@ -104,29 +116,34 @@ describe('public API surface', () => {
   // Adding a name here is a deliberate act: it is what the next version has to keep working.
   const SURFACE: Record<string, string[]> = {
     'packages/omniface/dist/index.d.ts': [
-      'AnySchema', 'App', 'AppConfig', 'AuthAdapter', 'AuthContext', 'AuthSession', 'BuildOptions', 'BuildResult', 'CliCommandSpec',
-      'CliConfig', 'CliFacetAdapter', 'CliFlagSpec', 'CliOverride', 'CorsConfig', 'Credential', 'CsrfConfig',
-      'DEFAULT_ALLOW_HEADERS', 'DEFAULT_EXPOSE_HEADERS', 'DEFAULT_METHODS', 'ERROR_CODES', 'ErrorCode', 'Facet',
-      'FacetAdapters', 'FacetError', 'FacetErrorOptions', 'FacetName', 'FacetsConfig', 'FieldDisplay', 'FieldPresentation', 'FieldTraits', 'HandlerArgs',
-      'ChangeLevel', 'FACET_KEYS', 'FacetKey', 'FixError', 'FixIO', 'FixPlan', 'FixResult',
-      'FormatDiffOptions', 'ManifestChange', 'ManifestDiff', 'Unfixable',
-      'Hook', 'HookStage', 'IO', 'InferIn', 'InferOut', 'Invocation', 'InvokeInit', 'JSONSchema', 'LintFinding',
-      'LintOptions', 'MANIFEST_VERSION', 'MASK', 'MCP_TOOL_BUDGET', 'Manifest', 'ManifestAdapters', 'ManifestOp', 'ManifestScreen', 'ManifestTool',
-      'McpCallContext', 'McpConfig', 'McpFacetAdapter', 'McpOverride', 'McpToolGroup', 'NormalizedFacets',
-      'OAuthResourceConfig', 'PROTECTED_RESOURCE_PATH', 'declaredScopes', 'oauthChallenge', 'protectedResourceMetadata', 'Op',
-      'OVERRIDE_BUDGET', 'OpBuilder', 'OpConfig', 'OpFactory', 'OpIds', 'OpInspection', 'OpTraits', 'OpsTree',
-      'OriginMatcher', 'Plugin',
-      'PluginAdapters', 'Principal', 'RESERVED_CLI_COMMANDS', 'RESERVED_CLI_FLAGS', 'RESERVED_SDK_OPTIONS',
-      'RegisteredOp', 'RestConfig', 'RestFacetAdapter', 'RestOverride', 'RestPluginRoute', 'RestResultContext',
-      'RestRouteContext', 'STAGES', 'ScreenContext', 'SchemaAdapter', 'SdkConfig', 'SdkFacetAdapter', 'SdkOptionSpec', 'SecurityConfig',
-      'SecurityHeadersConfig', 'SecurityScheme', 'ServerOptions', 'Stage', 'StandardSchemaV1', 'ValidationIssue',
-      'adapterProblems', 'anonymous', 'build', 'buildManifest', 'createServer', 'defineAuthAdapter', 'definePlugin',
-      'applyFixPlans', 'applyNamedTypeFixes', 'captureDefinitionSites', 'definitionSite', 'diffManifests', 'errors', 'exampleValue',
-      'facet', 'formatDiff', 'getFieldTraits', 'hasTrait', 'inspectAll', 'inspectOp', 'lint', 'planNamedTypeFixes',
-      'verdict',
-      'humanLabel', 'objectProperties', 'op', 'paginate', 'presentFields', 'presentValue', 'publicSchema', 'redact', 'tableColumns', 'registerSchemaAdapter', 'requiredProperties',
-      'renderIndex', 'renderScreen', 'escapeHtml', 'restNamespace', 'securityMiddleware', 'serve', 'setFieldTraits', 'setSchemaName', 'stripInternal',
-      'toFacetError', 'toJSONSchema', 'validate', 'WEB_CSP', 'WebAgentConfig', 'WebAppOptions', 'WebConfig', 'WebOverride', 'WebTool', 'AgentAllow', 'agentMayCall', 'createWebApp', 'webTools',
+      'AgentAllow', 'AnySchema', 'App', 'AppConfig', 'AuthAdapter', 'AuthContext', 'AuthSession', 'BuildOptions',
+      'BuildResult', 'ChangeLevel', 'CliCommandSpec', 'CliConfig', 'CliFacetAdapter', 'CliFlagSpec', 'CliOverride',
+      'CliProjection', 'CliSettings', 'ContractContext', 'CorsConfig', 'Credential', 'CsrfConfig', 'DEFAULT_ALLOW_HEADERS',
+      'DEFAULT_EXPOSE_HEADERS', 'DEFAULT_METHODS', 'ERROR_CODES', 'ErrorCode', 'Facet', 'FacetAdapters', 'FacetChange',
+      'FacetError', 'FacetErrorOptions', 'FacetKey', 'FacetModule', 'FacetName', 'FacetPresentation', 'FacetServer',
+      'FacetsConfig', 'FieldDisplay', 'FieldPresentation', 'FieldTraits', 'FixError', 'FixIO', 'FixPlan', 'FixResult',
+      'FormatDiffOptions', 'HandlerArgs', 'Hook', 'HookStage', 'IO', 'InferIn', 'InferOut', 'Invocation', 'InvokeInit',
+      'JSONSchema', 'LintFinding', 'LintOptions', 'MANIFEST_VERSION', 'MASK', 'MCP_TOOL_BUDGET', 'Manifest',
+      'ManifestAdapters', 'ManifestChange', 'ManifestDiff', 'ManifestOp', 'ManifestScreen', 'ManifestTool',
+      'McpCallContext', 'McpConfig', 'McpFacetAdapter', 'McpOverride', 'McpProjection', 'McpSettings', 'McpToolGroup',
+      'NormalizedFacets', 'OAuthResourceConfig', 'OVERRIDE_BUDGET', 'Op', 'OpBuilder', 'OpConfig', 'OpFactory', 'OpIds',
+      'OpInspection', 'OpTraits', 'OpsTree', 'OriginMatcher', 'PROTECTED_RESOURCE_PATH', 'Plugin', 'PluginAdapters',
+      'PresentationContext', 'Principal', 'ProjectionContext', 'RESERVED_CLI_COMMANDS', 'RESERVED_CLI_FLAGS',
+      'RESERVED_SDK_OPTIONS', 'RegisteredOp', 'RestConfig', 'RestFacetAdapter', 'RestOverride', 'RestPluginRoute',
+      'RestProjection', 'RestResultContext', 'RestRouteContext', 'STAGES', 'SchemaAdapter', 'ScreenContext', 'SdkConfig',
+      'SdkFacetAdapter', 'SdkOptionSpec', 'SdkProjection', 'SdkSettings', 'SecurityConfig', 'SecurityHeadersConfig',
+      'SecurityScheme', 'ServerOptions', 'Stage', 'StandardSchemaV1', 'Unfixable', 'ValidationIssue', 'WEB_CSP',
+      'WebAgentConfig', 'WebAppOptions', 'WebConfig', 'WebOverride', 'WebSettings', 'WebTool', 'adapterProblems',
+      'agentMayCall', 'anonymous', 'applyFixPlans', 'applyNamedTypeFixes', 'build', 'buildManifest',
+      'captureDefinitionSites', 'cliOf', 'cliSettings', 'createServer', 'createWebApp', 'declaredScopes',
+      'defineAuthAdapter', 'defineFacet', 'definePlugin', 'definitionSite', 'diffManifests', 'enabledFacets', 'errors',
+      'escapeHtml', 'exampleValue', 'facet', 'facetModule', 'facetModules', 'formatDiff', 'getFieldTraits', 'hasTrait',
+      'humanLabel', 'inspectAll', 'inspectOp', 'isUntrusted', 'lint', 'mcpOf', 'mcpSettings', 'mcpTools', 'oauthChallenge',
+      'objectProperties', 'op', 'paginate', 'planNamedTypeFixes', 'presentFields', 'presentValue', 'projectionOf',
+      'protectedResourceMetadata', 'publicSchema', 'redact', 'registerFacet', 'registerSchemaAdapter', 'renderIndex',
+      'renderScreen', 'requiredProperties', 'restNamespace', 'restOf', 'sdkOf', 'sdkSettings', 'securityMiddleware',
+      'serve', 'setFieldTraits', 'setSchemaName', 'settingsOf', 'stripInternal', 'tableColumns', 'toFacetError',
+      'toJSONSchema', 'validate', 'verdict', 'webOf', 'webSettings', 'webTools',
     ],
     'packages/omniface/dist/zod/index.d.ts': ['t'],
     'packages/omniface/dist/plugins/index.d.ts': [
@@ -172,6 +189,12 @@ describe('public API surface', () => {
   }
 
   it.each(Object.keys(SURFACE))('%s exports exactly the documented names', (file) => {
-    expect(declaredExports(readFileSync(join(ROOT, file), 'utf8'))).toEqual([...SURFACE[file]!].sort())
+    const dts = join(ROOT, file)
+    if (!existsSync(dts)) throw new Error(`${file} does not exist. ${BUILD_HINT}`)
+    // A stale `dist` produces the same diff as a real regression, so the message says so: the
+    // names below are the source tree's, the names on disk are whatever was last built.
+    expect(declaredExports(readFileSync(dts, 'utf8')), `if this reads like an API regression, it may be a stale build. ${BUILD_HINT}`).toEqual(
+      [...SURFACE[file]!].sort(),
+    )
   })
 })

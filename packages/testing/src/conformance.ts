@@ -1,5 +1,9 @@
 import {
   buildManifest,
+  facetModules,
+  restOf,
+  webOf,
+  webSettings,
   exampleValue,
   objectProperties,
   requiredProperties,
@@ -113,87 +117,25 @@ async function inputIsValid(app: App, id: string, input: Record<string, unknown>
 // ---------------------------------------------------------------------------------------------
 // The contract check: what each facet advertises, without calling anything
 
-function explicitlyOff(app: App, facet: 'rest' | 'mcp' | 'cli' | 'web', id: string): boolean {
-  const config = app.facets[facet] as { ops?: Record<string, unknown> } | null
-  return config?.ops?.[id] === false
-}
-
-function inGroup(app: App, id: string): boolean {
-  return Object.values(app.facets.mcp?.tools ?? {}).some((group) => group.ops.includes(id))
-}
-
+/**
+ * The contract check: what each facet advertises about an op, without calling anything.
+ *
+ * Nothing here knows the facets. Each facet module answers for its own projection — is the op
+ * missing from it, do the bindings name fields the op actually has, does a name collide — so a
+ * facet added as a module is checked by the generated suite the moment it is registered, which is
+ * the whole point of the contract.
+ */
 function contractProblems(app: App, manifest: Manifest, op: ManifestOp): string[] {
   const problems: string[] = []
-  const props = Object.keys(objectProperties(op.input))
-
-  // Projection: an op silently missing from a facet is the drift this whole project exists to stop.
-  if (manifest.facets.rest && !op.rest && !explicitlyOff(app, 'rest', op.id)) problems.push('no REST binding')
-  if (manifest.facets.cli && !op.cli && !explicitlyOff(app, 'cli', op.id)) problems.push('no CLI binding')
-  if (manifest.facets.mcp && !op.mcp && !explicitlyOff(app, 'mcp', op.id) && !inGroup(app, op.id)) {
-    problems.push('no MCP binding')
+  const others = manifest.ops.filter((o) => o.id !== op.id)
+  for (const module of facetModules()) {
+    if (!(module.name in op.facets)) continue
+    problems.push(...(module.contract?.({ app, manifest, op, others }, op.facets[module.name]) ?? []))
   }
-  if (manifest.facets.sdk && !op.sdk) problems.push('no SDK binding')
-  if (manifest.facets.web && !op.web && !explicitlyOff(app, 'web', op.id)) problems.push('no web screen')
-
-  // Bindings may only name fields the op actually has.
-  for (const p of op.rest?.pathParams ?? []) if (!props.includes(p)) problems.push(`REST path param "${p}" is not an input field`)
-  for (const a of op.cli?.args ?? []) if (!props.includes(a)) problems.push(`CLI arg "${a}" is not an input field`)
-  for (const p of op.web?.pathParams ?? []) if (!props.includes(p)) problems.push(`web route param "${p}" is not an input field`)
-  if (op.web) {
-    // A screen may only show fields the op declares. The projection derives them, so this can only
-    // fail on an override — which is exactly the drift a typo in a column list causes elsewhere.
-    const items = objectProperties(op.output)['items']
-    const row = items?.items ?? items
-    const source =
-      op.web.kind === 'form'
-        ? objectProperties(op.input)
-        : op.web.kind === 'table' && row
-          ? objectProperties(row, op.output)
-          : objectProperties(op.output)
-    if (Object.keys(source).length) {
-      for (const f of op.web.fields) {
-        if (!(f in source)) problems.push(`web field "${f}" is not ${op.web.kind === 'form' ? 'an input' : 'an output'} field`)
-      }
-    }
-    for (const f of Object.keys(op.web.labels ?? {})) {
-      if (!op.web.fields.includes(f)) problems.push(`web label "${f}" names a field the screen does not show`)
-    }
-  }
-  for (const c of op.cli?.columns ?? []) {
-    const items = objectProperties(op.output)['items']
-    const row = items?.items ?? items
-    if (row && Object.keys(objectProperties(row, op.output)).length && !(c in objectProperties(row, op.output))) {
-      problems.push(`CLI column "${c}" is not an output field`)
-    }
-  }
-  if (op.sdk && op.sdk.method.join('.') !== op.path.join('.')) problems.push('SDK method path differs from the op id')
-
-  // Every facet advertises the same input fields.
-  const tool = op.mcp && 'tool' in op.mcp ? manifest.mcpTools.find((t) => t.name === op.mcp!['tool' as never]) : undefined
-  if (tool) {
-    const toolProps = Object.keys(objectProperties(tool.inputSchema))
-    const missing = props.filter((p) => !toolProps.includes(p))
-    const extra = toolProps.filter((p) => !props.includes(p))
-    if (missing.length) problems.push(`MCP tool is missing input fields: ${missing.join(', ')}`)
-    if (extra.length) problems.push(`MCP tool advertises unknown input fields: ${extra.join(', ')}`)
-  }
-
-  // Internal fields are stripped from what runs; they must not leak into what is advertised either.
-  const advertised = JSON.stringify([op.input, op.output, tool?.inputSchema, tool?.outputSchema])
-  if (advertised.includes('"x-omniface-internal":true')) problems.push('an internal field is advertised in a schema')
-
-  // Names are how consumers address an op; two ops answering to one name is drift by definition.
-  for (const other of manifest.ops) {
-    if (other.id === op.id) continue
-    if (op.rest && other.rest && op.rest.method === other.rest.method && op.rest.path === other.rest.path) {
-      problems.push(`REST ${op.rest.method} ${op.rest.path} collides with ${other.id}`)
-    }
-    if (op.cli && other.cli && op.cli.command.join(' ') === other.cli.command.join(' ')) {
-      problems.push(`CLI command "${op.cli.command.join(' ')}" collides with ${other.id}`)
-    }
-    if (op.mcp && other.mcp && 'tool' in op.mcp && 'tool' in other.mcp && op.mcp.tool === other.mcp.tool) {
-      problems.push(`MCP tool "${op.mcp.tool}" collides with ${other.id}`)
-    }
+  // Internal fields are stripped from what runs; they must not leak into what is advertised
+  // either. True of every facet, so it is asked once rather than per facet.
+  if (JSON.stringify([op.input, op.output]).includes('"x-omniface-internal":true')) {
+    problems.push('an internal field is advertised in a schema')
   }
   return problems
 }
@@ -262,14 +204,14 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
       })
     }
 
-    const channels = CHANNELS.filter((c) => (c === 'sdk' ? Boolean(op.sdk) : Boolean(op[c])))
+    const channels = CHANNELS.filter((c) => op.facets[c] != null)
 
     add('contract', [], async () => ({ problems: contractProblems(template, manifest, op) }))
 
     // Missing required input is invalid on every facet, whatever the app does. A field bound to a
     // REST path param is the exception: over HTTP there is no request that omits it, so the check
     // drops those fields, and the op entirely when they are all it requires.
-    const omittable = required.filter((key) => !op.rest?.pathParams.includes(key))
+    const omittable = required.filter((key) => !restOf(op)?.pathParams.includes(key))
     if (required.length && omittable.length) {
       const input = Object.fromEntries(Object.entries(sample).filter(([key]) => !omittable.includes(key)))
       add('invalid_input', channels, async (h) => {
@@ -353,13 +295,13 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
     // The browser agent, both halves (docs/BACKLOG.md 12.10). The page's tool list is not the
     // enforcement, so the case that matters is the call the page never advertised: it arrives with
     // the same claim a real tool makes, and it has to be refused anyway.
-    if (manifest.web?.agent && op.rest) {
+    if (webSettings(manifest)?.agent && restOf(op)) {
       add('agent', ['rest'], async (h) => {
         if (!(await inputIsValid(template, op.id, sample))) {
           return { problems: [`no valid input could be synthesized; set ops['${op.id}'].input`] }
         }
         const outcome = await h.callAsAgent(op.id, sample, { apiKey: options.apiKey })
-        const advertised = op.web?.agent === true
+        const advertised = webOf(op)?.agent === true
         const problems: string[] = []
         if (!advertised && outcome.ok) problems.push('an op the page does not advertise answered a browser-agent call')
         if (!advertised && !outcome.ok && outcome.code !== 'forbidden') {
@@ -374,7 +316,7 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
 
     // A write on a screen carries a CSRF token, because a console is the one facet with ambient
     // authority. A form that arrives without one is a form from somewhere else.
-    if (op.web && op.web.kind === 'form') {
+    if (webOf(op)?.kind === 'form') {
       add('csrf', ['web'], async (h) => {
         const outcome = await h.postWithoutToken(op.id, sample, { apiKey: options.apiKey })
         const problems: string[] = []
@@ -412,21 +354,21 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
     // server is making a promise to a stranger — that being refused tells them where to go — and a
     // promise nothing checks is the kind this repo has been bitten by. Only ops that actually
     // refuse an anonymous caller are asked; a public op has nothing to point at.
-    if (manifest.oauth && op.rest && typeof traits.scope === 'string') {
+    if (manifest.oauth && restOf(op) && typeof traits.scope === 'string') {
       add('discovery', ['rest'], async (h) => {
         const problems: string[] = []
         // The same request the `anonymous` check makes, minus the credential: a refusal for the
         // wrong reason (an empty body is `invalid_input`, not `unauthenticated`) would prove
         // nothing about where to get a credential.
-        let path = op.rest!.path
+        let path = restOf(op)!.path
         const rest = { ...sample }
-        for (const p of op.rest!.pathParams) {
+        for (const p of restOf(op)!.pathParams) {
           path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p] ?? MISSING_ID)))
           delete rest[p]
         }
         const url = new URL(BASE_URL + path)
-        const init: RequestInit = { method: op.rest!.method }
-        if (op.rest!.method === 'GET' || op.rest!.method === 'DELETE') {
+        const init: RequestInit = { method: restOf(op)!.method }
+        if (restOf(op)!.method === 'GET' || restOf(op)!.method === 'DELETE') {
           for (const [k, v] of Object.entries(rest)) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
         } else {
           init.body = JSON.stringify(rest)
@@ -470,7 +412,8 @@ export function conformanceCases(options: ConformanceOptions): ConformanceCase[]
     // a record — so without this the web facet's only generated assertion is that the screen was
     // not a 500, and a console that renders nothing at all passes. This reads the HTML and asks
     // `presentation.ts`, the table the renderer itself renders from, what should be on it.
-    if (op.web && (op.web.kind === 'table' || op.web.kind === 'detail') && op.rest && canRunHappyPath) {
+    const screen = webOf(op)
+    if (screen && (screen.kind === 'table' || screen.kind === 'detail') && restOf(op) && canRunHappyPath) {
       add('presentation', ['rest', 'web'], async (h) => {
         if (!(await inputIsValid(template, op.id, sample))) {
           return { problems: [`no valid input could be synthesized; set ops['${op.id}'].input`] }

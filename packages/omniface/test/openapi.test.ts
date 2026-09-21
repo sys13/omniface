@@ -111,7 +111,7 @@ describe('OpenAPI', () => {
       nextCursor: 'nextCursor',
     })
     expect(get['x-omniface-pagination']).toBeUndefined()
-    expect(doc['x-facet']).toMatchObject({ manifest: 1, facets: { rest: true, mcp: true, cli: true, sdk: true }, sdk: { packageName: 'drive-sdk' } })
+    expect(doc['x-facet']).toMatchObject({ manifest: 2, facets: ['rest', 'mcp', 'cli', 'sdk'] })
   })
 
   it('reports one name used for two different shapes instead of silently picking one', () => {

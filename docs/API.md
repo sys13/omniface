@@ -32,12 +32,23 @@ bump promises about it.
 | Name | What |
 | --- | --- |
 | `build`, `BuildOptions`, `BuildResult` | Write `.omniface/`: manifest, OpenAPI, `llms.txt`, the generated SDK package, the CLI package |
-| `buildManifest`, `Manifest`, `ManifestOp`, `ManifestTool`, `ManifestScreen`, `ManifestAdapters`, `MANIFEST_VERSION` | The manifest every facet and the CLI engine read |
+| `buildManifest`, `Manifest`, `ManifestOp`, `ManifestTool`, `ManifestScreen`, `ManifestAdapters`, `MANIFEST_VERSION`, `isUntrusted` | The manifest every facet and the CLI engine read |
 | `inspectAll`, `inspectOp`, `OpInspection` | One op on every facet, as data |
 | `lint`, `LintFinding`, `LintOptions`, `MCP_TOOL_BUDGET`, `OVERRIDE_BUDGET` | The definition lints |
 | `planNamedTypeFixes`, `applyNamedTypeFixes`, `applyFixPlans`, `FixPlan`, `FixResult`, `FixIO`, `Unfixable`, `FixError` | What `omniface lint --fix` rewrites, and the check around it |
 | `captureDefinitionSites`, `definitionSite` | Where each op was written; off unless asked, and only `--fix` asks |
-| `diffManifests`, `formatDiff`, `verdict`, `ManifestDiff`, `ManifestChange`, `ChangeLevel`, `FacetKey`, `FACET_KEYS`, `FormatDiffOptions` | The breaking-change diff, answered once per facet |
+| `diffManifests`, `formatDiff`, `verdict`, `ManifestDiff`, `ManifestChange`, `ChangeLevel`, `FacetKey`, `FormatDiffOptions` | The breaking-change diff, answered once per facet |
+
+**Extension — authoring a facet.** A facet is a module, not a set of keys the core knows. The
+authoring guide is [FACETS.md](FACETS.md).
+
+| Name | What |
+| --- | --- |
+| `defineFacet`, `registerFacet`, `FacetModule` | The contract, and how a facet joins the registry |
+| `facetModules`, `facetModule`, `enabledFacets` | The registry: every facet, in the order output uses |
+| `projectionOf`, `settingsOf` | Reading a facet's slot out of a manifest keyed by facet name |
+| `ProjectionContext`, `PresentationContext`, `ContractContext`, `FacetPresentation`, `FacetChange`, `FacetServer` | What each hook is handed and what it returns |
+| `restOf`, `mcpOf`, `mcpSettings`, `mcpTools`, `cliOf`, `cliSettings`, `sdkOf`, `sdkSettings`, `webOf`, `webSettings` | The five shipped facets' own accessors, and their projection and settings types |
 
 **Extension — authenticating a caller.** The contract lives in the core because the pipeline reads
 it; the adapters that implement it are `omniface/auth`.

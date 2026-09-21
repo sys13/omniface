@@ -2,17 +2,23 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative, resolve } from 'node:path'
 import type { App } from './app.ts'
+import { facetModules } from './facet.ts'
 import { buildOpenApi } from './facets/openapi.ts'
 import { inspectAll } from './inspect.ts'
 import { buildManifest, type Manifest } from './manifest.ts'
+import { cliSettings } from './facets/cli.facet.ts'
+import { sdkSettings } from './facets/sdk.facet.ts'
 import { buildSdk } from './sdk.ts'
 
 function llmsTxt(app: App, manifest: Manifest): string {
   const inspection = inspectAll(app, manifest)
   const lines = [`# ${manifest.name}`, '', `> ${manifest.description ?? `${manifest.name} API`}`, '']
-  const web = manifest.web ? `, and a web console (${manifest.web.path})` : ''
+  // Each facet says how to introduce itself; nothing here knows what the set is.
+  const reachable = facetModules()
+    .filter((m) => manifest.facets[m.name] != null && m.summary)
+    .map((m) => m.summary!(manifest.facets[m.name]))
   lines.push(
-    `Reachable as a REST API (OpenAPI at /openapi.json), an MCP server (/mcp), a CLI, and a TypeScript SDK${web}. Every operation behaves the same on all of them.`,
+    `Reachable as ${reachable.slice(0, -1).join(', ')}${reachable.length > 1 ? ' and ' : ''}${reachable[reachable.length - 1] ?? 'nothing yet'}. Every operation behaves the same on all of them.`,
     '',
     '## Operations',
     '',
@@ -21,11 +27,10 @@ function llmsTxt(app: App, manifest: Manifest): string {
     const traits = Object.entries(op.traits).map(([k, v]) => (v === true ? k : `${k}=${v}`))
     lines.push(`### ${op.id}`, '', op.description ?? '', '')
     if (traits.length) lines.push(`Traits: ${traits.join(', ')}`, '')
-    if (op.rest) lines.push(`- REST: \`${op.rest.method} ${op.rest.path}\``)
-    if (op.cli) lines.push(`- CLI: \`${op.cli.snippet}\``)
-    if (op.mcp) lines.push(`- MCP tool: \`${op.mcp.tool.name}\``)
-    if (op.sdk) lines.push(`- SDK: \`${op.sdk.snippet.split('\n')[0]}\``)
-    if (op.web) lines.push(`- Web: ${op.web.screen.kind} at \`${manifest.web?.path ?? ''}${op.web.screen.path}\``)
+    for (const module of facetModules()) {
+      const line = op.facets[module.name]?.line
+      if (line) lines.push(line)
+    }
     lines.push('')
   }
   return lines.join('\n')
@@ -55,11 +60,12 @@ export async function build(app: App, outDir: string, options: BuildOptions = {}
     'openapi.json': JSON.stringify(buildOpenApi(manifest), null, 2) + '\n',
     'llms.txt': llmsTxt(app, manifest),
   }
-  if (manifest.sdk) {
+  if (sdkSettings(manifest)) {
     Object.assign(files, buildSdk(manifest, { clientImport: options.clientImport, facetVersion: FACET_VERSION }))
   }
-  if (manifest.cli) {
-    const bin = manifest.cli.binName
+  const cli = cliSettings(manifest)
+  if (cli) {
+    const bin = cli.binName
     files['cli/manifest.json'] = files['manifest.json']!
     files['cli/package.json'] =
       JSON.stringify(

@@ -10,6 +10,7 @@ import { buildManifest, type Manifest } from '../manifest.ts'
 import type { Credential } from '../plugin.ts'
 import { challenge, originOf } from './oauth.ts'
 import { clientFromHeaders, credentialFromHeaders } from './http.ts'
+import { mcpOf, mcpTools } from './mcp.facet.ts'
 
 export type McpServerOptions = {
   /** The credential every call runs as (stdio), or a function for per-connection credentials. */
@@ -56,7 +57,7 @@ export function createMcpServer(app: App, options: McpServerOptions = {}): Serve
   const opsById = new Map(manifest.ops.map((o) => [o.id, o]))
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: manifest.mcpTools.map((tool) => ({
+    tools: mcpTools(manifest).map((tool) => ({
       name: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema as { type: 'object' },
@@ -66,7 +67,7 @@ export function createMcpServer(app: App, options: McpServerOptions = {}): Serve
   }))
 
   server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
-    const tool = manifest.mcpTools.find((t) => t.name === request.params.name)
+    const tool = mcpTools(manifest).find((t) => t.name === request.params.name)
     if (!tool) return errorResult(errors.notFound(`Unknown tool "${request.params.name}"`), request.params.name)
     const args = (request.params.arguments ?? {}) as Record<string, unknown>
 
@@ -89,7 +90,8 @@ export function createMcpServer(app: App, options: McpServerOptions = {}): Serve
     }
 
     const op = opsById.get(opId)!
-    const binding = op.mcp && 'tool' in op.mcp ? op.mcp : undefined
+    const projection = mcpOf(op)
+    const binding = projection && 'tool' in projection ? projection : undefined
     if (op.traits.paginated && binding?.maxItems && input.limit === undefined && 'limit' in objectProperties(op.input)) {
       input.limit = binding.maxItems
     }

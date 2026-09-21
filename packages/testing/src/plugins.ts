@@ -1,4 +1,4 @@
-import { STAGES, adapterProblems, buildManifest, createServer, facet, restNamespace, type App, type Manifest, type Plugin } from 'omniface'
+import { STAGES, adapterProblems, buildManifest, cliOf, createServer, facet, restNamespace, restOf, type App, type Manifest, type Plugin } from 'omniface'
 import { CHANNELS, createHarness, outcomesAgree, type Channel, type Outcome } from './harness.ts'
 import { createSampleApp } from './sample-app.ts'
 
@@ -229,8 +229,7 @@ export function pluginCases(options: PluginConformanceOptions): PluginCase[] {
     for (const id of contributedOps(manifest, name)) {
       const op = manifest.ops.find((o) => o.id === id)!
       for (const facetName of CHANNELS) {
-        const bound = facetName === 'sdk' ? op.sdk : op[facetName]
-        if (manifest.facets[facetName] && !bound) problems.push(`${id} has no ${facetName} binding`)
+        if (manifest.facets[facetName] && op.facets[facetName] == null) problems.push(`${id} has no ${facetName} binding`)
       }
       const input = sampleInput(manifest, id)
       if (!input) continue
@@ -252,7 +251,7 @@ export function pluginCases(options: PluginConformanceOptions): PluginCase[] {
         if (!route.path.startsWith(`${restNamespace(name)}/`)) {
           problems.push(`route ${route.method} ${route.path} is outside the plugin namespace ${restNamespace(name)}`)
         }
-        const shadowed = manifest.ops.find((o) => o.rest?.path === route.path)
+        const shadowed = manifest.ops.find((o) => restOf(o)?.path === route.path)
         if (shadowed) problems.push(`route ${route.method} ${route.path} shadows the op ${shadowed.id}`)
       }
 
@@ -267,7 +266,7 @@ export function pluginCases(options: PluginConformanceOptions): PluginCase[] {
       for (const command of plugin.adapters!.cli?.commands ?? []) {
         const op = manifest.ops.find((o) => o.id === command.op)
         if (!op) problems.push(`CLI command "${command.command}" names the unknown op ${command.op}`)
-        else if (manifest.facets.cli && !op.cli) problems.push(`CLI command "${command.command}" names ${op.id}, which has no CLI binding`)
+        else if (manifest.facets['cli'] && !cliOf(op)) problems.push(`CLI command "${command.command}" names ${op.id}, which has no CLI binding`)
       }
       return problems
     })

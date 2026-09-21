@@ -118,7 +118,7 @@ export function securityMiddleware(config: SecurityConfig | false | undefined = 
   const headers = config.headers === false ? undefined : (config.headers ?? {})
 
   if (cors?.credentials && matches(cors.origin, '*') && typeof cors.origin !== 'function') {
-    throw new Error("facet: cors.origin '*' cannot be combined with credentials: true")
+    throw new Error("omniface: cors.origin '*' cannot be combined with credentials: true")
   }
 
   const allowMethods = (cors?.methods ?? DEFAULT_METHODS).join(', ')

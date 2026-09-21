@@ -1,6 +1,9 @@
 import { objectProperties, type JSONSchema } from '../jsonschema.ts'
 import { MINT_OP } from '../agent.ts'
-import { isUntrusted, type Manifest, type ManifestOp, type ManifestScreen } from '../manifest.ts'
+import { isUntrusted, type Manifest, type ManifestOp } from '../manifest.ts'
+import { mcpOf, mcpTools } from './mcp.facet.ts'
+import { restOf } from './rest.facet.ts'
+import { webOf, webSettings, type ManifestScreen } from './web.facet.ts'
 import { conventionalToolName } from '../naming.ts'
 import { humanLabel, presentFields, presentValue, tableColumns, type FieldPresentation } from '../presentation.ts'
 
@@ -23,7 +26,7 @@ export function escapeHtml(value: unknown): string {
 }
 
 export type ScreenContext = {
-  /** Where the facet is mounted. `manifest.web.path` unless a host app says otherwise. */
+  /** Where the facet is mounted. `webSettings(manifest).path` unless a host app says otherwise. */
   basePath?: string
   /** Route params already resolved: `{ id: 'task_1' }`. */
   params?: Record<string, string>
@@ -141,11 +144,12 @@ export type WebTool = {
  * registered or not, which is the property 12.10 tests.
  */
 export function webTools(manifest: Manifest): WebTool[] {
-  if (!manifest.web?.agent) return []
+  if (!webSettings(manifest)?.agent) return []
   const out: WebTool[] = []
   for (const op of manifest.ops) {
-    if (!op.web?.agent || !op.rest) continue
-    const tool = op.mcp && 'tool' in op.mcp ? manifest.mcpTools.find((t) => t.name === op.mcp!['tool' as never]) : undefined
+    const rest = restOf(op)
+    if (!webOf(op)?.agent || !rest) continue
+    const tool = (() => { const m = mcpOf(op); return m && 'tool' in m ? mcpTools(manifest).find((t) => t.name === m.tool) : undefined })()
     const untrusted = isUntrusted(op.traits, op.output)
     out.push({
       name: tool?.name ?? conventionalToolName(op.path),
@@ -159,7 +163,7 @@ export function webTools(manifest: Manifest): WebTool[] {
         ...(untrusted ? { untrustedContentHint: true } : {}),
       },
       op: op.id,
-      request: { method: op.rest.method, path: op.rest.path, pathParams: op.rest.pathParams },
+      request: { method: rest.method, path: rest.path, pathParams: rest.pathParams },
     })
   }
   return out
@@ -170,8 +174,9 @@ export function webTools(manifest: Manifest): WebTool[] {
  * case the tools lean on the cookie, and the page says so in `window.facetAgent.attenuated`.
  */
 function mintPath(manifest: Manifest): string | null {
-  if (manifest.web?.agentCredential !== 'attenuated') return null
-  return manifest.ops.find((o) => o.id === MINT_OP)?.rest?.path ?? null
+  if (webSettings(manifest)?.agentCredential !== 'attenuated') return null
+  const mint = manifest.ops.find((o) => o.id === MINT_OP)
+  return (mint && restOf(mint)?.path) ?? null
 }
 
 /**
@@ -285,7 +290,7 @@ function screenUrl(base: string, screen: ManifestScreen, params: Record<string, 
 function screens(manifest: Manifest): { group: string; ops: ManifestOp[] }[] {
   const groups = new Map<string, ManifestOp[]>()
   for (const op of manifest.ops) {
-    if (!op.web) continue
+    if (!webOf(op)) continue
     const group = op.path.length > 1 ? op.path[0]! : ''
     groups.set(group, [...(groups.get(group) ?? []), op])
   }
@@ -297,7 +302,8 @@ function screens(manifest: Manifest): { group: string; ops: ManifestOp[] }[] {
  * an app may take one out of the nav without taking away its route (`hidden`).
  */
 function navigable(op: ManifestOp): boolean {
-  return op.web !== null && op.web.pathParams.length === 0 && !op.web.hidden
+  const screen = webOf(op)
+  return screen !== null && screen.pathParams.length === 0 && !screen.hidden
 }
 
 /** `order` first, lowest to highest; everything without one keeps manifest order, after those. */
@@ -305,8 +311,8 @@ function inNavOrder(ops: ManifestOp[]): ManifestOp[] {
   return ops
     .map((op, i) => ({ op, i }))
     .sort((a, b) => {
-      const ao = a.op.web!.order
-      const bo = b.op.web!.order
+      const ao = webOf(a.op)!.order
+      const bo = webOf(b.op)!.order
       if (ao !== undefined && bo !== undefined) return ao - bo || a.i - b.i
       if (ao !== undefined) return -1
       if (bo !== undefined) return 1
@@ -395,15 +401,15 @@ function labelFor(field: FieldPresentation, error?: string): string {
 function renderTable(manifest: Manifest, op: ManifestOp, base: string, data: unknown): string {
   const row = (objectProperties(op.output)['items']?.items ?? {}) as JSONSchema
   const fields = new Map(presentFields(row, op.output).map((f) => [f.name, f]))
-  const columns = tableColumns(row, op.output, op.web!.fields)
+  const columns = tableColumns(row, op.output, webOf(op)!.fields)
   const page = (data ?? {}) as { items?: Record<string, unknown>[]; nextCursor?: string | null }
   const items = page.items ?? []
   if (!items.length) return `<p class="empty">Nothing here yet.</p>`
   const detail = manifest.ops.find(
-    (o) => o.web?.kind === 'detail' && o.path[0] === op.path[0] && o.web.pathParams.includes('id'),
+    (o) => webOf(o)?.kind === 'detail' && o.path[0] === op.path[0] && webOf(o)!.pathParams.includes('id'),
   )
   const head = columns
-    .map((c) => `<th scope="col" data-field="${escapeHtml(c)}">${escapeHtml(labelOf(op.web!, fields.get(c), c))}${deprecatedMark(fields.get(c))}</th>`)
+    .map((c) => `<th scope="col" data-field="${escapeHtml(c)}">${escapeHtml(labelOf(webOf(op)!, fields.get(c), c))}${deprecatedMark(fields.get(c))}</th>`)
     .join('')
   const body = items
     .map((item) => {
@@ -411,7 +417,7 @@ function renderTable(manifest: Manifest, op: ManifestOp, base: string, data: unk
         const rendered = fieldValue(item[c], fields.get(c))
         const linked =
           i === 0 && detail && item['id'] !== undefined
-            ? `<a href="${escapeHtml(screenUrl(base, detail.web!, { id: String(item['id']) }))}">${rendered}</a>`
+            ? `<a href="${escapeHtml(screenUrl(base, webOf(detail)!, { id: String(item['id']) }))}">${rendered}</a>`
             : rendered
         return `<td data-field="${escapeHtml(c)}">${linked}</td>`
       })
@@ -419,13 +425,13 @@ function renderTable(manifest: Manifest, op: ManifestOp, base: string, data: unk
     })
     .join('')
   const more = page.nextCursor
-    ? `<p><a href="${escapeHtml(screenUrl(base, op.web!))}?cursor=${encodeURIComponent(page.nextCursor)}">Next page</a></p>`
+    ? `<p><a href="${escapeHtml(screenUrl(base, webOf(op)!))}?cursor=${encodeURIComponent(page.nextCursor)}">Next page</a></p>`
     : ''
   return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>${more}`
 }
 
 function renderDetail(op: ManifestOp, data: unknown): string {
-  const screen = op.web!
+  const screen = webOf(op)!
   const known = new Map(presentFields(op.output).map((f) => [f.name, f]))
   const shown = screen.fields.filter((name) => known.has(name))
   const value = (data ?? {}) as Record<string, unknown>
@@ -443,7 +449,7 @@ function renderDetail(op: ManifestOp, data: unknown): string {
 }
 
 function renderForm(op: ManifestOp, base: string, ctx: ScreenContext): string {
-  const screen = op.web!
+  const screen = webOf(op)!
   const props = objectProperties(op.input)
   const known = new Map(presentFields(op.input).map((f) => [f.name, f]))
   const values = ctx.values ?? {}
@@ -483,7 +489,7 @@ function shell(
       const links = inNavOrder(ops.filter(navigable))
         .map(
           (o) =>
-            `<a href="${escapeHtml(screenUrl(base, o.web!))}"${o.id === current ? ' aria-current="page"' : ''}>${escapeHtml(o.web!.title)}</a>`,
+            `<a href="${escapeHtml(screenUrl(base, webOf(o)!))}"${o.id === current ? ' aria-current="page"' : ''}>${escapeHtml(webOf(o)!.title)}</a>`,
         )
         .join('')
       return links ? `${group ? `<h2>${escapeHtml(humanLabel(group))}</h2>` : ''}${links}` : ''
@@ -517,15 +523,15 @@ function errorBlock(error: ScreenContext['error']): string {
 
 /** The resource's other screens, as links — a table's "New task", a detail's "Edit" and "Delete". */
 function relatedActions(manifest: Manifest, op: ManifestOp, base: string, params: Record<string, string>): string {
-  const chosen = op.web!.actions
+  const chosen = webOf(op)!.actions
   const candidates = chosen
-    ? chosen.map((id) => manifest.ops.find((o) => o.id === id)).filter((o): o is ManifestOp => Boolean(o?.web))
-    : manifest.ops.filter((o) => o.id !== op.id && o.web && o.path[0] === op.path[0])
+    ? chosen.map((id) => manifest.ops.find((o) => o.id === id)).filter((o): o is ManifestOp => Boolean(o && webOf(o)))
+    : manifest.ops.filter((o) => o.id !== op.id && webOf(o) && o.path[0] === op.path[0])
   const links = candidates
-    .filter((o) => o.web!.pathParams.every((p) => p in params))
+    .filter((o) => webOf(o)!.pathParams.every((p) => p in params))
     .map(
       (o) =>
-        `<a href="${escapeHtml(screenUrl(base, o.web!, params))}"${o.web!.confirm ? ' class="danger"' : ''}>${escapeHtml(o.web!.title)}</a>`,
+        `<a href="${escapeHtml(screenUrl(base, webOf(o)!, params))}"${webOf(o)!.confirm ? ' class="danger"' : ''}>${escapeHtml(webOf(o)!.title)}</a>`,
     )
   return links.length ? `<div class="actions">${links.join('')}</div>` : ''
 }
@@ -537,22 +543,23 @@ function relatedActions(manifest: Manifest, op: ManifestOp, base: string, params
  */
 export function renderScreen(manifest: Manifest, opId: string, ctx: ScreenContext = {}): string {
   const op = manifest.ops.find((o) => o.id === opId)
-  if (!op?.web) {
+  const screen = op && webOf(op)
+  if (!op || !screen) {
     throw new Error(`facet web: "${opId}" has no screen. Declare the op, or write your own app against the SDK.`)
   }
-  const base = ctx.basePath ?? manifest.web?.path ?? ''
+  const base = ctx.basePath ?? webSettings(manifest)?.path ?? ''
   const params = ctx.params ?? {}
   const body =
-    op.web.kind === 'table'
+    screen.kind === 'table'
       ? renderTable(manifest, op, base, ctx.data)
-      : op.web.kind === 'detail'
+      : screen.kind === 'detail'
         ? renderDetail(op, ctx.data)
         : renderForm(op, base, ctx)
-  const heading = `<h2 class="screen">${escapeHtml(op.web.title)}</h2><p class="desc">${escapeHtml(op.description ?? op.id)}</p>`
+  const heading = `<h2 class="screen">${escapeHtml(screen.title)}</h2><p class="desc">${escapeHtml(op.description ?? op.id)}</p>`
   return shell(
     manifest,
     base,
-    op.web.title,
+    screen.title,
     op.id,
     heading + errorBlock(ctx.error) + relatedActions(manifest, op, base, params) + body,
     ctx.error?.code,
@@ -561,12 +568,12 @@ export function renderScreen(manifest: Manifest, opId: string, ctx: ScreenContex
 
 /** The front page: every screen reachable without an id, and nothing invented to fill it out. */
 export function renderIndex(manifest: Manifest, ctx: ScreenContext = {}): string {
-  const base = ctx.basePath ?? manifest.web?.path ?? ''
+  const base = ctx.basePath ?? webSettings(manifest)?.path ?? ''
   const entries = screens(manifest)
     .flatMap(({ ops }) => inNavOrder(ops.filter(navigable)))
     .map(
       (o) =>
-        `<dt><a href="${escapeHtml(screenUrl(base, o.web!))}">${escapeHtml(o.web!.title)}</a></dt><dd>${escapeHtml(o.description ?? o.id)}</dd>`,
+        `<dt><a href="${escapeHtml(screenUrl(base, webOf(o)!))}">${escapeHtml(webOf(o)!.title)}</a></dt><dd>${escapeHtml(o.description ?? o.id)}</dd>`,
     )
     .join('')
   const body = entries ? `<dl>${entries}</dl>` : `<p class="empty">No screens without an id.</p>`

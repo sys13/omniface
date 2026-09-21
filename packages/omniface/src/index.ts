@@ -1,5 +1,6 @@
-// The public surface of `facet`. Anything not re-exported from this file (or from `facet/zod`,
-// `facet/plugins`, `facet/rest`, `facet/mcp`) is internal and may change in any release.
+// The public surface of `omniface`. Anything not re-exported from this file (or from
+// `omniface/auth`, `omniface/zod`, `omniface/plugins`, `omniface/rest`, `omniface/mcp`) is
+// internal and may change in any release.
 // The tiers below, and what each promises, are documented in docs/API.md.
 
 // --- Core: defining and running an app -------------------------------------------------------
@@ -44,7 +45,6 @@ export { createServer, serve, type ServerOptions } from './server.ts'
 // --- Core: tooling behind the `facet` CLI ----------------------------------------------------
 export { build, type BuildOptions, type BuildResult } from './build.ts'
 export {
-  FACET_KEYS,
   diffManifests,
   formatDiff,
   verdict,
@@ -88,15 +88,41 @@ export {
 export {
   MANIFEST_VERSION,
   buildManifest,
+  isUntrusted,
   type Manifest,
   type ManifestAdapters,
   type ManifestOp,
-  type ManifestScreen,
   type ManifestTool,
 } from './manifest.ts'
 
+// --- Extension: authoring a facet -------------------------------------------------------------
+// A facet is a module: a projection, a diff contract, a presentation, and a serve hook only if it
+// is served. See docs/FACETS.md. The five omniface ships are written against exactly this.
+export {
+  defineFacet,
+  enabledFacets,
+  facetModule,
+  facetModules,
+  projectionOf,
+  registerFacet,
+  settingsOf,
+  type ContractContext,
+  type FacetChange,
+  type FacetModule,
+  type FacetPresentation,
+  type FacetServer,
+  type PresentationContext,
+  type ProjectionContext,
+} from './facet.ts'
+import './facets/builtin.ts'
+export { cliOf, cliSettings, type CliProjection, type CliSettings } from './facets/cli.facet.ts'
+export { mcpOf, mcpSettings, mcpTools, type McpProjection, type McpSettings } from './facets/mcp.facet.ts'
+export { restOf, type RestProjection } from './facets/rest.facet.ts'
+export { sdkOf, sdkSettings, type SdkProjection, type SdkSettings } from './facets/sdk.facet.ts'
+export { webOf, webSettings, type ManifestScreen, type WebSettings } from './facets/web.facet.ts'
+
 // --- Extension: authenticating a caller -------------------------------------------------------
-// The contract lives here; the adapters that implement it are `facet/auth`.
+// The contract lives here; the adapters that implement it are `omniface/auth`.
 export { defineAuthAdapter, type AuthAdapter, type AuthContext, type AuthSession } from './auth/adapter.ts'
 export {
   securityMiddleware,

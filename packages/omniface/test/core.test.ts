@@ -5,6 +5,7 @@ import { buildOpenApi } from '../src/facets/openapi.ts'
 import { redact, stripInternal } from '../src/jsonschema.ts'
 import { scopes } from '../src/plugins/index.ts'
 import { t } from '../src/zod/index.ts'
+import { cliOf, cliSettings, mcpOf, mcpTools, restOf, sdkOf } from 'omniface'
 
 const Note = t.named('Note', z.object({ id: t.id(), body: z.string(), email: t(z.email(), { pii: true }).optional(), secret: t(z.string(), { internal: true }) }))
 
@@ -35,7 +36,7 @@ function notesApp(facets?: NoteFacets) {
 
 describe('conventions', () => {
   const m = buildManifest(notesApp())
-  const rest = Object.fromEntries(m.ops.map((o) => [o.id, o.rest && `${o.rest.method} ${o.rest.path}`]))
+  const rest = Object.fromEntries(m.ops.map((o) => [o.id, restOf(o) && `${restOf(o)!.method} ${restOf(o)!.path}`]))
 
   it('derives REST bindings from op names and inputs', () => {
     expect(rest).toEqual({
@@ -51,17 +52,17 @@ describe('conventions', () => {
 
   it('hides internal ops from every facet', () => {
     expect(m.ops.map((o) => o.id)).not.toContain('notes.reindex')
-    expect(m.mcpTools.map((t) => t.name)).not.toContain('notes_reindex')
+    expect(mcpTools(m).map((t) => t.name)).not.toContain('notes_reindex')
   })
 
   it('names CLI commands and MCP tools by convention, with a positional id', () => {
     const get = m.ops.find((o) => o.id === 'notes.get')!
-    expect(get.cli).toEqual({ command: ['notes', 'get'], args: ['id'] })
-    expect(get.mcp).toEqual({ tool: 'notes_get', description: 'notes.get' })
+    expect(cliOf(get)).toEqual({ command: ['notes', 'get'], args: ['id'] })
+    expect(mcpOf(get)).toEqual({ tool: 'notes_get', description: 'notes.get' })
   })
 
   it('turns traits into MCP annotations', () => {
-    const tool = (name: string) => m.mcpTools.find((t) => t.name === name)!.annotations
+    const tool = (name: string) => mcpTools(m).find((t) => t.name === name)!.annotations
     expect(tool('notes_get')).toMatchObject({ readOnlyHint: true, destructiveHint: false, idempotentHint: true })
     expect(tool('notes_delete')).toMatchObject({ readOnlyHint: false, destructiveHint: true })
     expect(tool('notes_update')).toMatchObject({ idempotentHint: true })
@@ -84,19 +85,19 @@ describe('overrides', () => {
       }),
     )
     const op = (id: string) => m.ops.find((o) => o.id === id)!
-    expect(op('notes.archive').rest).toMatchObject({ method: 'PUT', path: '/archive/{id}', pathParams: ['id'] })
-    expect(op('notes.search').rest).toBeNull()
-    expect(op('notes.search').cli).toEqual({ command: ['find'], args: ['q'] })
-    expect(m.cli).toEqual({ binName: 'nt' })
-    expect(m.mcpTools.find((t) => t.name === 'read_note')!.description).toBe('Read one note')
+    expect(restOf(op('notes.archive'))).toMatchObject({ method: 'PUT', path: '/archive/{id}', pathParams: ['id'] })
+    expect(restOf(op('notes.search'))).toBeNull()
+    expect(cliOf(op('notes.search'))).toEqual({ command: ['find'], args: ['q'] })
+    expect(cliSettings(m)).toEqual({ binName: 'nt' })
+    expect(mcpTools(m).find((t) => t.name === 'read_note')!.description).toBe('Read one note')
   })
 
   it('groups ops into one intent-level MCP tool, and stops listing them individually', () => {
     const m = buildManifest(notesApp({ mcp: { tools: { manage_notes: { description: 'Work with notes', ops: ['notes.create', 'notes.update', 'notes.get'] } } } }))
-    const names = m.mcpTools.map((t) => t.name)
+    const names = mcpTools(m).map((t) => t.name)
     expect(names).toContain('manage_notes')
     expect(names).not.toContain('notes_create')
-    const group = m.mcpTools.find((t) => t.name === 'manage_notes')!
+    const group = mcpTools(m).find((t) => t.name === 'manage_notes')!
     expect(group.inputSchema.properties.action.enum).toEqual(['create', 'update', 'get'])
     expect(group.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false })
     expect(group.description).toContain('Actions:')
@@ -104,10 +105,11 @@ describe('overrides', () => {
 
   it('omitting a facet turns it off; facets: undefined turns the four MVP facets on', () => {
     const m = buildManifest(notesApp({ rest: true }))
-    expect(m.facets).toEqual({ rest: true, mcp: false, cli: false, sdk: false, web: false })
-    expect(m.mcpTools).toEqual([])
+    // A facet that is off has no key at all: the record of what is on replaces the booleans.
+    expect(Object.keys(m.facets)).toEqual(['rest'])
+    expect(mcpTools(m)).toEqual([])
     // `web` stays off: it is opt-in even under `facets: undefined` (app.ts, WebConfig).
-    expect(buildManifest(notesApp()).facets).toEqual({ rest: true, mcp: true, cli: true, sdk: true, web: false })
+    expect(Object.keys(buildManifest(notesApp()).facets)).toEqual(['rest', 'mcp', 'cli', 'sdk'])
   })
 
   it('rejects overrides on unknown ops at runtime (and at compile time)', () => {
@@ -233,10 +235,10 @@ describe('openapi + inspect', () => {
 
   it('shows one op on every facet', () => {
     const i = inspectOp(app, 'notes.delete', m)
-    expect(i.rest?.curl).toContain('curl -X DELETE')
-    expect(i.cli?.snippet).toBe('notes notes delete string --yes')
-    expect(i.sdk?.snippet).toContain('client.notes.delete(')
-    expect(i.mcp?.tool.name).toBe('notes_delete')
+    expect(i.facets['rest']?.snippet).toContain('curl -X DELETE')
+    expect(i.facets['cli']?.snippet).toBe('notes notes delete string --yes')
+    expect(i.facets['sdk']?.snippet).toContain('client.notes.delete(')
+    expect((i.facets['mcp']?.detail as { tool: { name: string } }).tool.name).toBe('notes_delete')
     expect(i.pipeline.stages.find((s) => s.stage === 'handle')!.plugins).toEqual(['handler'])
   })
 })

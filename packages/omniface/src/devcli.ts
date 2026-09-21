@@ -11,6 +11,7 @@ import { runConformanceFor } from './conformance-run.ts'
 import { runDiff } from './diff-run.ts'
 import { formatDiff } from './diff.ts'
 import { runMcpStdio } from './facets/mcp.ts'
+import { facetModules } from './facet.ts'
 import { inspectAll, inspectOp } from './inspect.ts'
 import { applyNamedTypeFixes } from './fix.ts'
 import { lint, type LintFinding } from './lint.ts'
@@ -18,7 +19,7 @@ import { captureDefinitionSites } from './op.ts'
 import { buildManifest } from './manifest.ts'
 import { serve } from './server.ts'
 
-const USAGE = `facet — one definition, every interface
+const USAGE = `omniface — one definition, every interface
 
 Usage:
   omniface dev <entry> [--port 3000]     Serve REST, MCP (/mcp) and the inspector (/_omniface)
@@ -28,7 +29,7 @@ Usage:
   omniface lint <entry> [--fix]          Check the definition, optionally inserting t.named()
   omniface conformance <entry> [--strict] Prove every facet still agrees
   omniface diff <before> <after> [--strict]  What changed, and which facets it breaks
-  facet --version                     Print the facet version
+  omniface --version                     Print the omniface version
 
 <entry> is a module whose default export is a facet app.
 <before>/<after> are either such a module or a manifest.json from \`omniface build\`.
@@ -84,12 +85,13 @@ async function main(argv: string[]): Promise<number> {
       const m = buildManifest(app)
       process.stderr.write(
         [
-          `omniface dev: ${app.name} v${app.version}`,
-          m.facets.rest ? `  REST       ${base}  (OpenAPI ${base}/openapi.json)` : '',
-          m.facets.mcp ? `  MCP        ${base}/mcp  (${m.mcpTools.length} tools)` : '',
-          m.web ? `  Web        ${base}${m.web.path}  (${m.ops.filter((o) => o.web).length} screens)` : '',
-          `  Inspector  ${base}/_omniface`,
-          m.cli ? `  CLI        node .omniface/cli/bin.mjs --base-url ${base}  (after omniface build)` : '',
+          `omniface dev: ${app.name} v${app.version} on ${base}`,
+          // One line per facet the app has, from what that facet says about itself. Nothing here
+          // knows which facets exist, so a facet added as a module shows up in the banner too.
+          ...facetModules()
+            .filter((mod) => m.facets[mod.name] != null)
+            .map((mod) => `  ${mod.name.padEnd(10)} ${mod.summary?.(m.facets[mod.name]) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`}`),
+          `  ${'inspector'.padEnd(10)} ${base}/_omniface`,
           '',
         ]
           .filter((l) => l !== '')
@@ -111,9 +113,12 @@ async function main(argv: string[]): Promise<number> {
         const all = inspectAll(app)
         if (json) process.stdout.write(JSON.stringify(all, null, 2) + '\n')
         else {
-          process.stdout.write(`${all.name} v${all.version} · plugins: ${all.plugins.join(', ') || 'none'} · ${all.mcpToolCount} MCP tools\n\n`)
+          const on = Object.keys(all.facets)
+          process.stdout.write(`${all.name} v${all.version} · plugins: ${all.plugins.join(', ') || 'none'} · facets: ${on.join(', ') || 'none'}\n\n`)
+          // One column per facet the app has, filled from what that facet said about the op.
+          const cell = (op: (typeof all.ops)[number], facet: string) => op.facets[facet]?.short ?? '—'
           for (const op of all.ops) {
-            process.stdout.write(`${op.id.padEnd(20)} ${(op.rest ? `${op.rest.method} ${op.rest.path}` : '—').padEnd(30)} ${(op.cli?.command ?? '—').padEnd(26)} ${op.mcp?.tool.name ?? '—'}\n`)
+            process.stdout.write(`${op.id.padEnd(20)} ${on.map((f) => cell(op, f).padEnd(28)).join(' ').trimEnd()}\n`)
           }
         }
         return 0
@@ -128,17 +133,10 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(
         `${op.id}${op.description ? ` — ${op.description}` : ''}\n` +
           `traits: ${JSON.stringify(op.traits)}  source: ${op.source}\n` +
-          section('REST', op.rest && indent(op.rest.curl)) +
-          section('SDK', op.sdk && indent(op.sdk.snippet)) +
-          section('CLI', op.cli && indent(op.cli.snippet)) +
-          section('MCP', op.mcp && indent(JSON.stringify(op.mcp.tool, null, 2))) +
-          section(
-            'WEB',
-            op.web &&
-              indent(
-                `${op.web.screen.kind} · ${op.web.url}${op.web.screen.confirm ? ' · confirms' : ''}\n${op.web.screen.fields.join(', ') || '(no fields)'}`,
-              ),
-          ) +
+          // A section per facet the app has, in registry order, from what that facet presented.
+          Object.entries(op.facets)
+            .map(([, shown]) => section((shown?.label ?? '').toUpperCase(), shown?.snippet ? indent(shown.snippet) : null))
+            .join('') +
           section(
             'Pipeline',
             indent(
@@ -252,7 +250,7 @@ main(process.argv.slice(2)).then(
     process.exitCode = code
   },
   (err: Error) => {
-    process.stderr.write(`facet: ${err.message}\n`)
+    process.stderr.write(`omniface: ${err.message}\n`)
     process.exitCode = 1
   },
 )

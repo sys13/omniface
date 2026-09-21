@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import { credentialFromAdapters, restNamespace, type PluginAdapters } from '../adapters.ts'
-import type { App } from '../app.ts'
+import type { App, RestConfig } from '../app.ts'
+import { restOf } from './rest.facet.ts'
 import { errors, toFacetError } from '../errors.ts'
 import { coerceString, objectProperties, typeOf } from '../jsonschema.ts'
 import { buildManifest, type Manifest, type ManifestOp } from '../manifest.ts'
@@ -12,7 +13,7 @@ import { securityMiddleware, type SecurityConfig } from './security.ts'
 async function readInput(c: Context, op: ManifestOp): Promise<Record<string, unknown>> {
   const props = objectProperties(op.input)
   const input: Record<string, unknown> = {}
-  const method = op.rest!.method
+  const method = restOf(op)!.method
   if (method === 'GET' || method === 'DELETE') {
     const queries = c.req.queries()
     for (const [key, values] of Object.entries(queries)) {
@@ -36,7 +37,7 @@ async function readInput(c: Context, op: ManifestOp): Promise<Record<string, unk
       if (body && typeof body === 'object' && !Array.isArray(body)) Object.assign(input, body)
     }
   }
-  for (const param of op.rest!.pathParams) {
+  for (const param of restOf(op)!.pathParams) {
     input[param] = coerceString(c.req.param(param) ?? '', props[param])
   }
   return input
@@ -86,7 +87,7 @@ export function createRestApp(app: App, manifest: Manifest = buildManifest(app),
   const hono = new Hono()
   const openapi = buildOpenApi(manifest)
   const adapters = app.adapters ?? []
-  hono.use('*', securityMiddleware(options.security ?? app.facets.rest?.security ?? {}))
+  hono.use('*', securityMiddleware(options.security ?? (app.facets['rest'] as RestConfig | null)?.security ?? {}))
 
   hono.get('/openapi.json', (c) => c.json(openapi))
   hono.get('/.well-known/facet.json', (c) => c.json(manifest))
@@ -99,9 +100,10 @@ export function createRestApp(app: App, manifest: Manifest = buildManifest(app),
   mountPluginRoutes(hono, adapters)
 
   for (const op of manifest.ops) {
-    if (!op.rest) continue
-    const route = op.rest.path.replace(/\{([^}]+)\}/g, ':$1')
-    hono.on(op.rest.method, route, async (c) => {
+    const rest = restOf(op)
+    if (!rest) continue
+    const route = rest.path.replace(/\{([^}]+)\}/g, ':$1')
+    hono.on(rest.method, route, async (c) => {
       const requestId = c.req.header('x-request-id') ?? newRequestId()
       c.header('x-request-id', requestId)
       const decorate = (status: number, ok: boolean) => {
@@ -121,8 +123,8 @@ export function createRestApp(app: App, manifest: Manifest = buildManifest(app),
           client: clientFromHeaders(c.req.raw.headers),
           headers: c.req.raw.headers,
         })
-        decorate(op.rest!.status, true)
-        return c.json(output as object, op.rest!.status as 200)
+        decorate(rest.status, true)
+        return c.json(output as object, rest.status as 200)
       } catch (raw) {
         const err = toFacetError(raw)
         decorate(err.status, false)

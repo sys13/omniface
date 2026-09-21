@@ -1,6 +1,8 @@
 import { adapterProblems, type PluginAdapters } from './adapters.ts'
-import { agentMayCall, MINT_OP, type WebAgentConfig } from './agent.ts'
+import { agentMayCall, type WebAgentConfig } from './agent.ts'
 import { FacetError, errors, toFacetError } from './errors.ts'
+import { facetModules } from './facet.ts'
+import './facets/builtin.ts'
 import type { OAuthResourceConfig } from './facets/oauth.ts'
 import type { SecurityConfig } from './facets/security.ts'
 import { stripInternal, toJSONSchema } from './jsonschema.ts'
@@ -104,7 +106,20 @@ export type WebConfig<Id extends string = string> = {
   agent?: boolean | WebAgentConfig<Id>
 }
 
-export type FacetsConfig<Id extends string = string> = {
+/**
+ * What an app says about its facets. The five omniface ships are named here for autocomplete; a
+ * facet authored elsewhere adds its own key by merging into this interface, which is why it is an
+ * interface and not a type alias:
+ *
+ * ```ts
+ * declare module 'omniface' {
+ *   interface FacetsConfig { zapier?: boolean | ZapierConfig }
+ * }
+ * ```
+ *
+ * Nothing at runtime reads these keys. `normalizeFacets` walks the facet registry.
+ */
+export interface FacetsConfig<Id extends string = string> {
   rest?: boolean | RestConfig<Id>
   mcp?: boolean | McpConfig<Id>
   cli?: boolean | CliConfig<Id>
@@ -138,13 +153,12 @@ export type InvokeInit = {
   headers?: Headers
 }
 
-export type NormalizedFacets = {
-  rest: RestConfig | null
-  mcp: McpConfig | null
-  cli: CliConfig | null
-  sdk: SdkConfig | null
-  web: WebConfig | null
-}
+/**
+ * The app's facet configs, keyed by facet name — each facet's own `normalize` decides what its
+ * value means, and `null` is off. Open, like everything else keyed by facet name: a facet reads
+ * its slot back with a cast it owns, and nothing else looks inside.
+ */
+export type NormalizedFacets = Record<string, any>
 
 export interface App<T extends OpsTree = OpsTree> {
   readonly kind: 'omniface.app'
@@ -219,49 +233,36 @@ function flatten(tree: OpsTree, source: string, prefix: string[], out: Map<strin
   }
 }
 
+/**
+ * What the app wrote, asked of each registered facet in turn. Omitting `facets` entirely gives
+ * every facet its `defaultOn` answer — which is on for the four MVP facets and off for `web`,
+ * because a screen is something a person lands on. See {@link WebConfig}.
+ */
 function normalizeFacets(facets: FacetsConfig | undefined): NormalizedFacets {
-  const pick = <C extends object>(v: boolean | C | undefined): C | null =>
-    v === undefined || v === false ? null : v === true ? ({} as C) : v
-  // `web` is absent from the default on purpose: the four MVP facets are on when nothing is said,
-  // the fifth is not. See {@link WebConfig}.
-  if (!facets) return { rest: {}, mcp: {}, cli: {}, sdk: {}, web: null }
-  return {
-    rest: pick(facets.rest),
-    mcp: pick(facets.mcp),
-    cli: pick(facets.cli),
-    sdk: pick(facets.sdk),
-    web: pick(facets.web),
+  const out: NormalizedFacets = {}
+  for (const module of facetModules()) {
+    const written = facets ? (facets as Record<string, unknown>)[module.name] : module.defaultOn
+    out[module.name] = module.normalize(written)
   }
+  return out
 }
 
-function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: NormalizedFacets): void {
+/**
+ * Every op id a facet's config names has to exist. Each facet says which keys of its own config
+ * are op ids (`references`) and what else it needs true (`check`); this walks the registry and
+ * asks, so a typo in a new facet's override key is caught by the same message as a typo in
+ * `rest.ops`.
+ */
+function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: NormalizedFacets, name: string): void {
   const unknown: string[] = []
-  const check = (facetName: string, ids: Iterable<string>) => {
-    for (const id of ids) if (!ops.has(id)) unknown.push(`${facetName}: "${id}"`)
-  }
-  check('rest.ops', Object.keys(facets.rest?.ops ?? {}))
-  check('mcp.ops', Object.keys(facets.mcp?.ops ?? {}))
-  check('cli.ops', Object.keys(facets.cli?.ops ?? {}))
-  check('web.ops', Object.keys(facets.web?.ops ?? {}))
-  const agent = facets.web?.agent
-  if (agent && agent !== true) {
-    check('web.agent.ops', Object.keys(agent.ops ?? {}))
-    // Asking for an attenuated credential without the plugin that mints one would silently fall
-    // back to the ambient session — the exact thing the setting exists to avoid.
-    if (agent.credential === 'attenuated' && !ops.has(MINT_OP)) {
-      throw new Error(
-        `facet: facets.web.agent.credential 'attenuated' needs the agentTokens() plugin, which contributes "${MINT_OP}"`,
-      )
+  for (const module of facetModules()) {
+    const config = facets[module.name]
+    if (config == null) continue
+    for (const { where, ids } of module.references?.(config) ?? []) {
+      for (const id of ids) if (!ops.has(id)) unknown.push(`${where}: "${id}"`)
     }
+    module.check?.(config, ops, { name })
   }
-  // A web screen may name other ops — as actions, or as where a write lands. Those are op ids too,
-  // and a typo in one is the same drift as a typo in an override key.
-  for (const [id, override] of Object.entries(facets.web?.ops ?? {})) {
-    if (!override) continue
-    check(`web.ops["${id}"].actions`, override.actions ?? [])
-    if (override.then && override.then !== 'back') check(`web.ops["${id}"].then`, [override.then])
-  }
-  for (const [tool, group] of Object.entries(facets.mcp?.tools ?? {})) check(`mcp.tools.${tool}`, group.ops)
   if (unknown.length) throw new Error(`facet: overrides reference unknown ops: ${unknown.join(', ')}`)
 }
 
@@ -278,8 +279,8 @@ function collectAdapters(
   // and on the CLI and the SDK it would surface in another process, far from the cause.
   const cliCommands = new Map<string, string>()
   for (const [id, reg] of ops) {
-    if (!facets.cli) break
-    const override = facets.cli.ops?.[id]
+    if (!facets['cli']) break
+    const override = (facets['cli'] as CliConfig).ops?.[id]
     if (override === false) continue
     const command = override?.command ? override.command.split(/\s+/) : conventionalCommand(reg.path)
     cliCommands.set(command.join(' '), `op "${id}"`)
@@ -319,7 +320,7 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
   flatten(config.ops, 'app', [], ops)
   for (const plugin of plugins) if (plugin.ops) flatten(plugin.ops, `plugin "${plugin.name}"`, [], ops)
   const facets = normalizeFacets(config.facets as FacetsConfig | undefined)
-  checkOverrides(ops, facets)
+  checkOverrides(ops, facets, config.name)
   const adapters = collectAdapters(ops, plugins, facets)
   // Gate 1: a declared scope nobody enforces is a silent hole on every facet. Refuse to start.
   const scoped = [...ops.values()].filter((r) => r.op.traits.scope).map((r) => r.id)
@@ -389,7 +390,7 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
       // The app's declaration about browser agents, enforced where it cannot be talked around
       // (docs/BACKLOG.md 12.7). `facet` here is a claim the caller made — it can narrow what is
       // allowed and never widen it, which is why this only ever refuses.
-      if (inv.facet === 'webmcp' && !agentMayCall(facets.web, id, registered.op.traits)) {
+      if (inv.facet === 'webmcp' && !agentMayCall(facets['web'], id, registered.op.traits)) {
         throw errors.forbidden(`"${id}" is not offered to browser agents`)
       }
       await runStage('authorize')

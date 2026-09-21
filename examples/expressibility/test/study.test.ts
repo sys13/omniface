@@ -6,6 +6,7 @@ import { createKubernetesApp } from '../src/kubernetes.ts'
 import { createStorageApp } from '../src/s3.ts'
 import { createStripeApp } from '../src/stripe.ts'
 import { createTrackerApp } from '../src/linear.ts'
+import { cliOf, mcpOf, mcpTools, restOf, sdkOf } from 'omniface'
 
 /**
  * The study's claims, as assertions. docs/EXPRESSIBILITY.md reads these numbers off a table; this
@@ -27,7 +28,7 @@ describe.each(SUBJECTS)('$name', ({ app, maxFindings }) => {
     const manifest = buildManifest(app())
     expect(manifest.ops.length).toBeGreaterThan(0)
     for (const op of manifest.ops) {
-      expect(op.rest ?? op.sdk ?? op.cli ?? op.mcp, `${op.id} reaches no facet`).toBeTruthy()
+      expect(restOf(op) ?? sdkOf(op) ?? cliOf(op) ?? mcpOf(op), `${op.id} reaches no facet`).toBeTruthy()
     }
   })
 
@@ -40,9 +41,9 @@ describe.each(SUBJECTS)('$name', ({ app, maxFindings }) => {
 describe('the control subject', () => {
   it('needs no per-op override on any facet', () => {
     const { facets } = createTrackerApp()
-    expect(facets.rest?.ops ?? {}).toEqual({})
-    expect(facets.cli?.ops ?? {}).toEqual({})
-    expect(facets.mcp?.ops ?? {}).toEqual({})
+    expect((facets['rest'] as { ops?: object })?.ops ?? {}).toEqual({})
+    expect((facets['cli'] as { ops?: object })?.ops ?? {}).toEqual({})
+    expect((facets['mcp'] as { ops?: object })?.ops ?? {}).toEqual({})
   })
 })
 
@@ -53,8 +54,8 @@ describe('generated ops (kubernetes)', () => {
       for (const verb of ['get', 'list', 'apply', 'delete', 'changesSince']) {
         const op = manifest.ops.find((o) => o.id === `${kind}.${verb}`)
         expect(op, `${kind}.${verb} is missing`).toBeTruthy()
-        expect(op!.rest).toBeTruthy()
-        expect(op!.cli).toBeTruthy()
+        expect(restOf(op!)).toBeTruthy()
+        expect(cliOf(op!)).toBeTruthy()
       }
     }
   })
@@ -63,8 +64,8 @@ describe('generated ops (kubernetes)', () => {
     const manifest = buildManifest(createKubernetesApp())
     // Fifteen resource ops collapse into three grouped tools; without the groups this app would
     // sit exactly on MCP_TOOL_BUDGET and a fourth CRD would break it.
-    expect(manifest.mcpTools.length).toBeLessThan(15)
-    expect(manifest.mcpTools.map((tool) => tool.name)).toContain('deployments_admin')
+    expect(mcpTools(manifest).length).toBeLessThan(15)
+    expect(mcpTools(manifest).map((tool) => tool.name)).toContain('deployments_admin')
   })
 })
 
@@ -72,7 +73,7 @@ describe('composite identity (github)', () => {
   it('needs an explicit path for every op whose identity is a tuple', () => {
     const manifest = buildManifest(createGithubApp())
     const issueGet = manifest.ops.find((op) => op.id === 'repos.issues.get')!
-    expect(issueGet.rest!.path).toBe('/repos/{owner}/{repo}/issues/{number}')
-    expect(issueGet.rest!.pathParams).toEqual(['owner', 'repo', 'number'])
+    expect(restOf(issueGet)!.path).toBe('/repos/{owner}/{repo}/issues/{number}')
+    expect(restOf(issueGet)!.pathParams).toEqual(['owner', 'repo', 'number'])
   })
 })

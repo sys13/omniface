@@ -1,5 +1,8 @@
+import { facetModule, facetModules, type ChangeLevel } from './facet.ts'
 import { objectProperties, requiredProperties, typeOf, type JSONSchema } from './jsonschema.ts'
 import { MANIFEST_VERSION, type Manifest, type ManifestAdapters, type ManifestOp } from './manifest.ts'
+
+import './facets/builtin.ts'
 
 /**
  * `omniface diff` — what changed between two versions of an app, and which facets it breaks.
@@ -15,18 +18,19 @@ import { MANIFEST_VERSION, type Manifest, type ManifestAdapters, type ManifestOp
  * every op (docs/README.md, principle 6), so the diff is a data comparison rather than four
  * facet-specific diffs kept in step by hand — a rule added to a facet's projection shows up here
  * the moment it reaches the manifest.
+ *
+ * No facet is named in this file. The rules here are the ones that hold whatever the facet is —
+ * an op that vanished, a field that was removed, a trait that changed — and each of them asks the
+ * facet registry which facets a caller would notice it on. What is specific to REST or to the CLI
+ * lives in that facet's module, under `diff` and `diffSettings`, and is tagged with the facet it
+ * came from as it lands. A facet in the manifest that this binary has never heard of still gets its
+ * presence, its projection and its removal reported; only its own rules are missing.
  */
 
-export type FacetKey = 'rest' | 'mcp' | 'cli' | 'sdk' | 'web'
+/** A facet name. Open: what a manifest carries is whatever facets the app that wrote it had. */
+export type FacetKey = string
 
-export const FACET_KEYS: readonly FacetKey[] = ['rest', 'mcp', 'cli', 'sdk', 'web']
-
-/**
- * - `breaking` — a caller that worked against `before` can stop working.
- * - `additive` — new surface; every existing caller keeps working.
- * - `neutral` — visible in the manifest, but no caller can tell (help text, descriptions, hints).
- */
-export type ChangeLevel = 'breaking' | 'additive' | 'neutral'
+export type { ChangeLevel }
 
 export type ManifestChange = {
   level: ChangeLevel
@@ -137,10 +141,29 @@ function typeName(schema: JSONSchema | undefined): string | undefined {
 // ---------------------------------------------------------------------------------------------
 // Which facets a change is visible on
 
+/**
+ * Every facet either manifest mentions: the registry's order first, so a report reads the same
+ * way every time, then anything else the file carries — a facet this binary does not have.
+ */
+function facetNames(...manifests: Manifest[]): FacetKey[] {
+  const seen = new Set<FacetKey>()
+  for (const m of manifests) for (const key of Object.keys(m.facets)) seen.add(key)
+  return inRegistryOrder(seen)
+}
+
+/** Registry order first, then anything else, so two lists of facets sort the same way. */
+function inRegistryOrder(names: Iterable<FacetKey>): FacetKey[] {
+  const seen = new Set(names)
+  const known = facetModules()
+    .map((m) => m.name)
+    .filter((name) => seen.has(name))
+  return [...known, ...[...seen].filter((name) => !known.includes(name)).sort()]
+}
+
 /** The facets an op is projected onto in a given manifest. */
 function opFacets(op: ManifestOp | undefined): FacetKey[] {
   if (!op) return []
-  return FACET_KEYS.filter((f) => op[f] !== null && op[f] !== undefined)
+  return inRegistryOrder(Object.keys(op.facets).filter((f) => op.facets[f] != null))
 }
 
 /** The facets both versions of an op share — where an existing caller could exist to break. */
@@ -157,50 +180,23 @@ function diffApp(before: Manifest, after: Manifest, push: (c: ManifestChange) =>
     push({
       level: 'breaking',
       rule: 'app-renamed',
-      facets: FACET_KEYS.filter((f) => before.facets[f] && after.facets[f]),
+      facets: facetNames(before, after).filter((f) => before.facets[f] && after.facets[f]),
       message: `The app was renamed ${before.name} → ${after.name}.`,
       detail: 'The name reaches every facet: SDK package, CLI bin, MCP server name, OpenAPI title.',
     })
   }
-  for (const facet of FACET_KEYS) {
-    if (before.facets[facet] && !after.facets[facet]) {
+  for (const facet of facetNames(before, after)) {
+    const was = before.facets[facet]
+    const is = after.facets[facet]
+    if (was && !is) {
       push({ level: 'breaking', rule: 'facet-removed', facets: [facet], message: `The ${facet} facet was turned off.` })
-    } else if (!before.facets[facet] && after.facets[facet]) {
+    } else if (!was && is) {
       push({ level: 'additive', rule: 'facet-added', facets: [facet], message: `The ${facet} facet was turned on.` })
+    } else if (was && is) {
+      // What the facet carries app-wide — a bin name, a mount path, a tool list — is the facet's
+      // own question, so it answers it.
+      for (const change of facetModule(facet)?.diffSettings?.(was, is) ?? []) push({ ...change, facets: [facet] })
     }
-  }
-  const beforeBin = before.cli?.binName
-  const afterBin = after.cli?.binName
-  if (beforeBin && afterBin && beforeBin !== afterBin) {
-    push({
-      level: 'breaking',
-      rule: 'cli-bin-renamed',
-      facets: ['cli'],
-      message: `The CLI binary was renamed ${beforeBin} → ${afterBin}.`,
-      detail: `Every script calling \`${beforeBin}\`, and the ${beforeBin.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_* environment variables, stop resolving.`,
-    })
-  }
-  const beforeMount = before.web?.path
-  const afterMount = after.web?.path
-  if (beforeMount && afterMount && beforeMount !== afterMount) {
-    push({
-      level: 'breaking',
-      rule: 'web-mount-moved',
-      facets: ['web'],
-      message: `The web facet moved ${beforeMount} → ${afterMount}.`,
-      detail: 'Every screen URL changes at once: bookmarks, links and any WebMCP registration tied to the page.',
-    })
-  }
-  const beforePkg = before.sdk?.packageName
-  const afterPkg = after.sdk?.packageName
-  if (beforePkg && afterPkg && beforePkg !== afterPkg) {
-    push({
-      level: 'breaking',
-      rule: 'sdk-package-renamed',
-      facets: ['sdk'],
-      message: `The SDK package was renamed ${beforePkg} → ${afterPkg}.`,
-      detail: `Every \`import … from '${beforePkg}'\` stops resolving, and the old name keeps installing the old version.`,
-    })
   }
 }
 
@@ -225,9 +221,9 @@ function diffOpPresence(before: Manifest, after: Manifest, push: (c: ManifestCha
 }
 
 function diffProjection(before: ManifestOp, after: ManifestOp, push: (c: ManifestChange) => void): void {
-  for (const facet of FACET_KEYS) {
-    const was = before[facet] !== null && before[facet] !== undefined
-    const is = after[facet] !== null && after[facet] !== undefined
+  for (const facet of inRegistryOrder([...Object.keys(before.facets), ...Object.keys(after.facets)])) {
+    const was = before.facets[facet] ?? null
+    const is = after.facets[facet] ?? null
     if (was && !is) {
       push({
         level: 'breaking',
@@ -238,6 +234,11 @@ function diffProjection(before: ManifestOp, after: ManifestOp, push: (c: Manifes
       })
     } else if (!was && is) {
       push({ level: 'additive', rule: 'op-projected', op: before.id, facets: [facet], message: `${before.id} is now exposed on ${facet}.` })
+    } else if (was && is) {
+      // Same op, same facet, two projections: what changed is the facet's own question.
+      for (const change of facetModule(facet)?.diff?.(was, is, { op: before.id }) ?? []) {
+        push({ ...change, op: before.id, facets: [facet] })
+      }
     }
   }
 }
@@ -263,7 +264,7 @@ function diffSchema(
       level: 'breaking',
       rule: 'type-renamed',
       op: id,
-      facets: facets.filter((f) => f === 'sdk' || f === 'rest'),
+      facets: facets.filter((f) => facetModule(f)?.observes?.typeNames),
       message: `${id} ${io} type ${wasNamed ?? '(derived)'} → ${isNamed ?? '(derived)'}.`,
       detail: 'Generated SDKs export the type under this name, and OpenAPI components are keyed by it.',
     })
@@ -410,14 +411,18 @@ function diffTraits(before: ManifestOp, after: ManifestOp, push: (c: ManifestCha
   // The CLI reads `destructive` as "confirm first", so turning it on is a breaking change for
   // scripts — they block on a prompt, or refuse on a non-TTY — while REST and MCP only gain a hint.
   if (!b.destructive && a.destructive) {
-    const cli = facets.filter((f) => f === 'cli')
+    // Which facets turn `destructive` into behaviour a caller runs into is each facet's own
+    // answer: the CLI prompts, a screen asks, REST and MCP only gain a hint.
+    const observing = facets.filter((f) => facetModule(f)?.observes?.traits?.includes('destructive'))
     push({
-      level: cli.length ? 'breaking' : 'neutral',
+      level: observing.length ? 'breaking' : 'neutral',
       rule: 'trait-destructive',
       op: id,
-      facets: cli.length ? cli : facets,
+      facets: observing.length ? observing : facets,
       message: `${id} is now destructive.`,
-      detail: cli.length ? 'The CLI prompts before running it; unattended scripts need --yes.' : 'MCP gains destructiveHint.',
+      detail: observing.length
+        ? 'A facet that acts on it stops an unattended caller: the CLI prompts, a screen asks. Scripts need --yes.'
+        : 'MCP gains destructiveHint.',
     })
   } else if (b.destructive && !a.destructive) {
     push({ level: 'neutral', rule: 'trait-destructive', op: id, facets, message: `${id} is no longer destructive.` })
@@ -459,191 +464,6 @@ function diffTraits(before: ManifestOp, after: ManifestOp, push: (c: ManifestCha
   }
   if (removedErrors.length) {
     push({ level: 'neutral', rule: 'errors-removed', op: id, facets, message: `${id} no longer declares ${removedErrors.join(', ')}.` })
-  }
-}
-
-function diffBindings(before: ManifestOp, after: ManifestOp, push: (c: ManifestChange) => void): void {
-  const id = before.id
-
-  const br = before.rest
-  const ar = after.rest
-  if (br && ar) {
-    if (br.method !== ar.method || br.path !== ar.path) {
-      push({
-        level: 'breaking',
-        rule: 'rest-route-changed',
-        op: id,
-        facets: ['rest'],
-        message: `${id}: ${ar.method} ${ar.path} — was ${br.method} ${br.path}.`,
-        detail: 'The old route 404s. Anything holding a URL — a webhook, a bookmark, a generated SDK — is pointed at nothing.',
-      })
-    }
-    if (br.status !== ar.status) {
-      push({
-        level: 'breaking',
-        rule: 'rest-status-changed',
-        op: id,
-        facets: ['rest'],
-        message: `${id}: success status ${br.status} → ${ar.status}.`,
-        detail: 'Clients that match on the exact status, rather than the 2xx class, stop matching.',
-      })
-    }
-  }
-
-  const bm = before.mcp
-  const am = after.mcp
-  if (bm && am) {
-    const bTool = 'tool' in bm ? bm.tool : `group:${bm.group}`
-    const aTool = 'tool' in am ? am.tool : `group:${am.group}`
-    if (bTool !== aTool) {
-      push({
-        level: 'breaking',
-        rule: 'mcp-tool-renamed',
-        op: id,
-        facets: ['mcp'],
-        message: `${id}: MCP tool ${bTool} → ${aTool}.`,
-        detail: 'Agents hold tool names in prompts, traces and evals; a rename reads as a removal plus an unfamiliar tool.',
-      })
-    } else if ('tool' in bm && 'tool' in am && bm.description !== am.description) {
-      push({ level: 'neutral', rule: 'mcp-description-changed', op: id, facets: ['mcp'], message: `${id}: MCP tool description changed.` })
-    }
-    if ('tool' in bm && 'tool' in am && bm.maxItems !== am.maxItems) {
-      push({ level: 'neutral', rule: 'mcp-max-items', op: id, facets: ['mcp'], message: `${id}: MCP result cap ${bm.maxItems ?? 'none'} → ${am.maxItems ?? 'none'}.` })
-    }
-  }
-
-  const bc = before.cli
-  const ac = after.cli
-  if (bc && ac) {
-    if (bc.command.join(' ') !== ac.command.join(' ')) {
-      push({
-        level: 'breaking',
-        rule: 'cli-command-renamed',
-        op: id,
-        facets: ['cli'],
-        message: `${id}: \`${ac.command.join(' ')}\` — was \`${bc.command.join(' ')}\`.`,
-        detail: 'Scripts, aliases and docs naming the old command stop working.',
-      })
-    }
-    if (bc.args.join(' ') !== ac.args.join(' ')) {
-      push({
-        level: 'breaking',
-        rule: 'cli-args-changed',
-        op: id,
-        facets: ['cli'],
-        message: `${id}: positional arguments [${bc.args.join(' ')}] → [${ac.args.join(' ')}].`,
-        detail: 'A value that used to be positional is now a flag, or the reverse; either way the old invocation is wrong.',
-      })
-    }
-    const bCols = bc.columns?.join(',')
-    const aCols = ac.columns?.join(',')
-    if (bCols !== aCols) {
-      push({
-        level: 'neutral',
-        rule: 'cli-columns-changed',
-        op: id,
-        facets: ['cli'],
-        message: `${id}: table columns ${bCols ?? '(default)'} → ${aCols ?? '(default)'}.`,
-        detail: 'Presentation only — `--output json` is unchanged.',
-      })
-    }
-  }
-
-  const bw = before.web
-  const aw = after.web
-  if (bw && aw) {
-    if (bw.path !== aw.path) {
-      push({
-        level: 'breaking',
-        rule: 'web-route-changed',
-        op: id,
-        facets: ['web'],
-        message: `${id}: screen ${aw.path} — was ${bw.path}.`,
-        detail: 'The old URL 404s. A bookmark, a link in an email, a browser agent holding the route all land on nothing.',
-      })
-    }
-    if (bw.kind !== aw.kind) {
-      push({
-        level: 'breaking',
-        rule: 'web-screen-kind-changed',
-        op: id,
-        facets: ['web'],
-        message: `${id}: screen kind ${bw.kind} → ${aw.kind}.`,
-        detail: 'A table that became a form is a different page. The trait behind it (`readonly`, `paginated`) changed too.',
-      })
-    }
-    if (!bw.confirm && aw.confirm) {
-      push({
-        level: 'breaking',
-        rule: 'web-confirm-added',
-        op: id,
-        facets: ['web'],
-        message: `${id}: the screen now asks before it runs.`,
-        detail: 'Same reason the CLI starts prompting: the op became `destructive`, and an unattended caller now stops.',
-      })
-    } else if (bw.confirm && !aw.confirm) {
-      push({
-        level: 'additive',
-        rule: 'web-confirm-removed',
-        op: id,
-        facets: ['web'],
-        message: `${id}: the screen no longer asks before it runs.`,
-      })
-    }
-    if (bw.fields.join(',') !== aw.fields.join(',')) {
-      push({
-        level: 'neutral',
-        rule: 'web-fields-changed',
-        op: id,
-        facets: ['web'],
-        message: `${id}: fields on screen [${bw.fields.join(' ')}] → [${aw.fields.join(' ')}].`,
-        detail: 'Presentation only — the schema change behind it, if there was one, is reported on its own.',
-      })
-    }
-    if (bw.title !== aw.title) {
-      push({ level: 'neutral', rule: 'web-title-changed', op: id, facets: ['web'], message: `${id}: screen title "${bw.title}" → "${aw.title}".` })
-    }
-  }
-
-  const bs = before.sdk
-  const as_ = after.sdk
-  if (bs && as_ && bs.method.join('.') !== as_.method.join('.')) {
-    push({
-      level: 'breaking',
-      rule: 'sdk-method-renamed',
-      op: id,
-      facets: ['sdk'],
-      message: `${id}: SDK method ${bs.method.join('.')}() → ${as_.method.join('.')}().`,
-    })
-  }
-}
-
-function diffTools(before: Manifest, after: Manifest, push: (c: ManifestChange) => void): void {
-  if (!before.facets.mcp || !after.facets.mcp) return
-  const afterNames = new Set(after.mcpTools.map((t) => t.name))
-  const beforeNames = new Set(before.mcpTools.map((t) => t.name))
-  for (const tool of before.mcpTools) {
-    if (afterNames.has(tool.name)) continue
-    // A tool that vanished because its only op did is already reported as op-removed; this is the
-    // case where the ops live on under a different tool, which no op-level rule can see.
-    if (tool.ops.every((id) => !after.ops.some((o) => o.id === id))) continue
-    push({
-      level: 'breaking',
-      rule: 'mcp-tool-removed',
-      facets: ['mcp'],
-      message: `MCP tool \`${tool.name}\` is gone; its ops are now reached as ${tool.ops
-        .map((id) => {
-          const op = after.ops.find((o) => o.id === id)
-          return op?.mcp ? ('tool' in op.mcp ? op.mcp.tool : op.mcp.group) : 'nothing'
-        })
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .join(', ')}.`,
-    })
-  }
-  for (const tool of after.mcpTools) {
-    if (beforeNames.has(tool.name)) continue
-    if (tool.ops.every((id) => !before.ops.some((o) => o.id === id))) continue
-    push({ level: 'additive', rule: 'mcp-tool-added', facets: ['mcp'], message: `MCP tool \`${tool.name}\` is new.` })
   }
 }
 
@@ -742,20 +562,18 @@ export function diffManifests(before: Manifest, after: Manifest): ManifestDiff {
     diffSchema(op, next, 'input', push)
     diffSchema(op, next, 'output', push)
     diffTraits(op, next, push)
-    diffBindings(op, next, push)
     if (op.description !== next.description) {
       push({ level: 'neutral', rule: 'op-description-changed', op: op.id, facets: sharedFacets(op, next), message: `${op.id}: description changed.` })
     }
   }
 
-  diffTools(before, after, push)
   diffAdapters(before, after, push)
 
   changes.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level] || (a.op ?? '').localeCompare(b.op ?? '') || a.rule.localeCompare(b.rule))
 
   const breaking = new Set<FacetKey>()
   for (const c of changes) if (c.level === 'breaking') for (const f of c.facets) breaking.add(f)
-  const live = FACET_KEYS.filter((f) => before.facets[f] || after.facets[f])
+  const live = facetNames(before, after).filter((f) => before.facets[f] || after.facets[f])
   const counts = { breaking: 0, additive: 0, neutral: 0 }
   for (const c of changes) counts[c.level]++
 

@@ -7,6 +7,7 @@ import { buildManifest, type Manifest, type ManifestOp } from '../manifest.ts'
 import { presentFields } from '../presentation.ts'
 import { credentialFromHeaders, newRequestId } from './http.ts'
 import { renderIndex, renderScreen, type ScreenContext } from './web.ts'
+import { webOf, webSettings } from './web.facet.ts'
 
 /**
  * Mounting the web facet (docs/BACKLOG.md 12.5): the screens, served.
@@ -76,7 +77,7 @@ function inputFromForm(op: ManifestOp, form: Record<string, string>, params: Rec
   const props = objectProperties(op.input)
   const input: Record<string, unknown> = {}
   for (const [name, schema] of Object.entries(props)) {
-    if (op.web!.pathParams.includes(name)) continue
+    if (webOf(op)!.pathParams.includes(name)) continue
     const raw = form[name]
     if (typeOf(schema) === 'boolean') {
       input[name] = raw !== undefined && raw !== '' && raw !== 'false'
@@ -85,7 +86,7 @@ function inputFromForm(op: ManifestOp, form: Record<string, string>, params: Rec
     if (raw === undefined || raw === '') continue
     input[name] = coerceString(raw, schema)
   }
-  for (const p of op.web!.pathParams) if (params[p] !== undefined) input[p] = params[p]
+  for (const p of webOf(op)!.pathParams) if (params[p] !== undefined) input[p] = params[p]
   return input
 }
 
@@ -115,21 +116,21 @@ function fieldErrors(op: ManifestOp, issues: { path: string; message: string }[]
 function landingUrl(manifest: Manifest, op: ManifestOp, base: string, result: unknown): string {
   const id = result && typeof result === 'object' ? (result as Record<string, unknown>)['id'] : undefined
   const fill = (target: ManifestOp): string | undefined => {
-    let path = target.web!.path
-    for (const p of target.web!.pathParams) {
+    let path = webOf(target)!.path
+    for (const p of webOf(target)!.pathParams) {
       const value = p === 'id' && id !== undefined ? String(id) : undefined
       if (value === undefined) return undefined
       path = path.replace(`{${p}}`, encodeURIComponent(value))
     }
     return `${base}${path === '/' ? '' : path}` || '/'
   }
-  const then = op.web!.then
+  const then = webOf(op)!.then
   if (then && then !== 'back') {
-    const target = manifest.ops.find((o) => o.id === then && o.web)
+    const target = manifest.ops.find((o) => o.id === then && webOf(o))
     const url = target ? fill(target) : undefined
     if (url) return url
   }
-  const table = manifest.ops.find((o) => o.web?.kind === 'table' && o.path[0] === op.path[0])
+  const table = manifest.ops.find((o) => webOf(o)?.kind === 'table' && o.path[0] === op.path[0])
   return (table && fill(table)) ?? base ?? '/'
 }
 
@@ -139,9 +140,9 @@ function landingUrl(manifest: Manifest, op: ManifestOp, base: string, result: un
  * order, so a route's position is still something an author can reason about.
  */
 function routeOrder(manifest: Manifest): ManifestOp[] {
-  const segments = (op: ManifestOp) => op.web!.path.split('/').filter(Boolean)
+  const segments = (op: ManifestOp) => webOf(op)!.path.split('/').filter(Boolean)
   return manifest.ops
-    .filter((op) => op.web)
+    .filter((op) => webOf(op))
     .map((op, i) => ({ op, i }))
     .sort((a, b) => {
       const as = segments(a.op)
@@ -161,7 +162,7 @@ function routeOrder(manifest: Manifest): ManifestOp[] {
  */
 export function createWebApp(app: App, manifest: Manifest = buildManifest(app), options: WebAppOptions = {}): Hono {
   const hono = new Hono()
-  const base = options.basePath ?? manifest.web?.path ?? ''
+  const base = options.basePath ?? webSettings(manifest)?.path ?? ''
   const adapters = app.adapters ?? []
   const csrfOn = options.csrf !== false
   const mint = options.newToken ?? randomToken
@@ -214,8 +215,8 @@ export function createWebApp(app: App, manifest: Manifest = buildManifest(app), 
   hono.get(base || '/', (c) => page(c, renderIndex(manifest, { basePath: base, csrfToken: csrfToken(c) })))
 
   for (const op of routeOrder(manifest)) {
-    const route = `${base}${op.web!.path === '/' ? '' : op.web!.path}`.replace(/\{([^}]+)\}/g, ':$1') || '/'
-    const reads = op.web!.kind !== 'form'
+    const route = `${base}${webOf(op)!.path === '/' ? '' : webOf(op)!.path}`.replace(/\{([^}]+)\}/g, ':$1') || '/'
+    const reads = webOf(op)!.kind !== 'form'
 
     hono.get(route, async (c) => {
       const params = c.req.param() as Record<string, string>
