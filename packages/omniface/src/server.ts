@@ -24,6 +24,10 @@ const INSPECTOR_CSP =
  * One HTTP server for every facet that is served, plus the inspector at /_omniface. Which facets
  * those are comes from the registry, not from a list here: a facet is served when its module has
  * a `serve` hook, and mounts in the order that hook asks for.
+ *
+ * That order is not cosmetic. Hono matches in registration order, so the first mount wins a route
+ * two facets both claim — which is why `web` (1) mounts before `rest` (2): a screen route and a
+ * REST route can be the same route, and the screen is meant to win.
  */
 export function createServer(app: App, options: ServerOptions = {}): Hono {
   const manifest = buildManifest(app)
@@ -39,8 +43,9 @@ export function createServer(app: App, options: ServerOptions = {}): Hono {
     })
     hono.get('/_omniface/inspect.json', (c) => c.json(inspectAll(app, manifest)))
   }
-  // Every facet that is on and is served, in the order each asked for. A facet that is not a
-  // server — `cli`, `sdk` — has no `serve` and is skipped; nothing here knows which is which.
+  // Every facet that is on and is served, lowest `mountOrder` first — and first mounted wins a
+  // route two of them both claim. A facet that is not a server — `cli`, `sdk` — has no `serve`
+  // and is skipped; nothing here knows which is which.
   const served = facetModules()
     .filter((m) => m.serve && app.facets[m.name] != null)
     .sort((a, b) => (a.serve!.mountOrder ?? 0) - (b.serve!.mountOrder ?? 0))
