@@ -1,13 +1,25 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 
 // What every published package promises: a build that consumers can resolve, and a public API
 // surface that only changes when someone means it to (docs/API.md).
 
 const ROOT = join(import.meta.dirname, '..')
 const PACKAGES = ['omniface', 'client', 'cli', 'testing'] as const
+
+// Every test in this file reads `dist`, which is the only thing in the suite that comes from a
+// build rather than from the source tree. `pnpm test` builds first; `pnpm test:only` and a bare
+// `vitest run` do not, which is the mode you reach for while iterating. Without the check below
+// an unbuilt tree fails with ENOENT and a stale one fails with a diff of exported names — both
+// read like an API regression, and neither says the build is what is missing.
+const BUILD_HINT = 'Run `pnpm build` and try again.'
+
+beforeAll(() => {
+  const unbuilt = PACKAGES.filter((dir) => !existsSync(join(ROOT, 'packages', dir, 'dist')))
+  if (unbuilt.length) throw new Error(`Not built: ${unbuilt.map((d) => `packages/${d}/dist`).join(', ')}. ${BUILD_HINT}`)
+})
 
 type PackageJson = {
   name: string
@@ -174,6 +186,12 @@ describe('public API surface', () => {
   }
 
   it.each(Object.keys(SURFACE))('%s exports exactly the documented names', (file) => {
-    expect(declaredExports(readFileSync(join(ROOT, file), 'utf8'))).toEqual([...SURFACE[file]!].sort())
+    const dts = join(ROOT, file)
+    if (!existsSync(dts)) throw new Error(`${file} does not exist. ${BUILD_HINT}`)
+    // A stale `dist` produces the same diff as a real regression, so the message says so: the
+    // names below are the source tree's, the names on disk are whatever was last built.
+    expect(declaredExports(readFileSync(dts, 'utf8')), `if this reads like an API regression, it may be a stale build. ${BUILD_HINT}`).toEqual(
+      [...SURFACE[file]!].sort(),
+    )
   })
 })
