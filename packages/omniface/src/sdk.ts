@@ -1,6 +1,10 @@
 import type { JSONSchema } from './jsonschema.ts'
 import type { Manifest, ManifestOp } from './manifest.ts'
 import { hoistNamedSchemas, type HoistedSchemas } from './schemas.ts'
+import { cliOf } from './facets/cli.facet.ts'
+import { mcpOf } from './facets/mcp.facet.ts'
+import { restOf } from './facets/rest.facet.ts'
+import { sdkOf, sdkSettings } from './facets/sdk.facet.ts'
 
 /**
  * The generated SDK package: `@acme/sdk`, for consumers who do not have the app's source.
@@ -182,8 +186,9 @@ type MethodNode = { ops: Record<string, ManifestOp>; children: Record<string, Me
 function methodTree(ops: ManifestOp[]): MethodNode {
   const root: MethodNode = { ops: {}, children: {} }
   for (const op of ops) {
-    if (!op.sdk) continue
-    const path = op.sdk.method
+    const sdk = sdkOf(op)
+    if (!sdk) continue
+    const path = sdk.method
     let node = root
     for (const segment of path.slice(0, -1)) node = node.children[segment] ??= { ops: {}, children: {} }
     node.ops[path[path.length - 1]!] = op
@@ -201,9 +206,12 @@ function methodDoc(op: ManifestOp, indent: string): string {
   const lines: string[] = []
   if (op.description) lines.push(op.description)
   const facets: string[] = []
-  if (op.rest) facets.push(`\`${op.rest.method} ${op.rest.path}\``)
-  if (op.cli) facets.push(`\`${op.cli.command.join(' ')}\``)
-  if (op.mcp && 'tool' in op.mcp) facets.push(`MCP \`${op.mcp.tool}\``)
+  const rest = restOf(op)
+  const cli = cliOf(op)
+  const mcp = mcpOf(op)
+  if (rest) facets.push(`\`${rest.method} ${rest.path}\``)
+  if (cli) facets.push(`\`${cli.command.join(' ')}\``)
+  if (mcp && 'tool' in mcp) facets.push(`MCP \`${mcp.tool}\``)
   if (facets.length) lines.push(`The same operation as ${facets.join(', ')}.`)
   if (op.traits.destructive) lines.push('Irreversible.')
   if (op.errors.length) lines.push(`Throws \`FacetClientError\` with code: ${op.errors.map((e) => `\`${e}\``).join(', ')}.`)
@@ -236,7 +244,7 @@ function methodSignatures(node: MethodNode, table: TypeTable, indent: string): s
 function paginatedInterfaces(manifest: Manifest, table: TypeTable): string {
   const out: string[] = []
   for (const op of manifest.ops) {
-    if (!op.sdk || !op.traits.paginated) continue
+    if (!sdkOf(op) || !op.traits.paginated) continue
     const { input, output } = table.opTypes[op.id]!
     const page = table.schemas[output]
     const items = (page?.properties?.items ?? {}) as JSONSchema
@@ -271,7 +279,7 @@ function optionDocs(manifest: Manifest): { types: string; specs: string } {
 }
 
 export function buildSdk(manifest: Manifest, options: { clientImport?: string; facetVersion: string }): SdkFiles {
-  const packageName = manifest.sdk?.packageName ?? `${manifest.name}-sdk`
+  const packageName = sdkSettings(manifest)?.packageName ?? `${manifest.name}-sdk`
   const clientImport = options.clientImport ?? '@omniface/client'
   const hoisted = hoistNamedSchemas(manifest, PREFIX)
   const table = typeTable(manifest, hoisted)

@@ -5,7 +5,7 @@ import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { EXIT_CODES, runCli } from '@omniface/cli'
 import { createClient, FacetClientError } from '@omniface/client'
-import { buildManifest, createServer, type App, type Manifest } from 'omniface'
+import { buildManifest, cliOf, createServer, mcpOf, restOf, webOf, webSettings, type App, type Manifest } from 'omniface'
 import { createMcpServer } from 'omniface/mcp'
 
 export const CHANNELS = ['rest', 'sdk', 'cli', 'mcp', 'web'] as const
@@ -65,20 +65,21 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
 
   async function viaRest(id: string, input: Record<string, unknown>, apiKey?: string, idempotencyKey?: string): Promise<Outcome> {
     const op = opOf(id)
-    if (!op.rest) throw new Error(`harness: ${id} has no REST binding`)
-    let path = op.rest.path
+    const binding = restOf(op)
+    if (!binding) throw new Error(`harness: ${id} has no REST binding`)
+    let path = binding.path
     const rest = { ...input }
-    for (const p of op.rest.pathParams) {
+    for (const p of binding.pathParams) {
       // A path param has no "absent" over HTTP: leaving it out would silently send "undefined".
       if (rest[p] === undefined || rest[p] === '') throw new Error(`harness: ${id} needs a value for the path param "${p}"`)
       path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p])))
       delete rest[p]
     }
     const url = new URL(BASE_URL + path)
-    const init: RequestInit = { method: op.rest.method, headers: {} as Record<string, string> }
+    const init: RequestInit = { method: binding.method, headers: {} as Record<string, string> }
     if (apiKey) (init.headers as Record<string, string>).authorization = `Bearer ${apiKey}`
     if (idempotencyKey) (init.headers as Record<string, string>)['idempotency-key'] = idempotencyKey
-    if (op.rest.method === 'GET' || op.rest.method === 'DELETE') {
+    if (binding.method === 'GET' || binding.method === 'DELETE') {
       for (const [k, v] of Object.entries(rest)) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
     } else {
       init.body = JSON.stringify(rest)
@@ -112,10 +113,11 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
 
   async function viaCli(id: string, input: Record<string, unknown>, apiKey?: string, idempotencyKey?: string): Promise<Outcome> {
     const op = opOf(id)
-    if (!op.cli) throw new Error(`harness: ${id} has no CLI binding`)
+    const binding = cliOf(op)
+    if (!binding) throw new Error(`harness: ${id} has no CLI binding`)
     let stdout = ''
     let stderr = ''
-    const argv = [...op.cli.command, '--json', JSON.stringify(input), '--output', 'json', '--yes', '--base-url', BASE_URL]
+    const argv = [...binding.command, '--json', JSON.stringify(input), '--output', 'json', '--yes', '--base-url', BASE_URL]
     if (apiKey) argv.push('--api-key', apiKey)
     if (idempotencyKey) argv.push('--idempotency-key', idempotencyKey)
     const code = await runCli({
@@ -136,13 +138,14 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
 
   async function viaMcp(id: string, input: Record<string, unknown>, apiKey?: string, idempotencyKey?: string): Promise<Outcome> {
     const op = opOf(id)
-    if (!op.mcp) throw new Error(`harness: ${id} has no MCP binding`)
+    const binding = mcpOf(op)
+    if (!binding) throw new Error(`harness: ${id} has no MCP binding`)
     const client = await mcpClient(apiKey)
     const meta = idempotencyKey ? { _meta: { 'omniface/idempotency-key': idempotencyKey } } : {}
     const result =
-      'group' in op.mcp
-        ? await client.callTool({ name: op.mcp.group, arguments: { action: op.path.at(-1), input }, ...meta })
-        : await client.callTool({ name: op.mcp.tool, arguments: input, ...meta })
+      'group' in binding
+        ? await client.callTool({ name: binding.group, arguments: { action: op.path.at(-1), input }, ...meta })
+        : await client.callTool({ name: binding.tool, arguments: input, ...meta })
     if (result.isError) {
       const err = (result._meta as any)?.['omniface/error'] ?? { code: 'unknown', message: '' }
       return { ok: false, code: err.code, message: err.message, ...(err.retryAfter !== undefined ? { retryAfter: err.retryAfter } : {}) }
@@ -159,11 +162,12 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
    */
   async function viaWeb(id: string, input: Record<string, unknown>, apiKey?: string): Promise<Outcome> {
     const op = opOf(id)
-    if (!op.web) throw new Error(`harness: ${id} has no web screen`)
-    const base = manifest.web?.path ?? ''
+    const screen = webOf(op)
+    if (!screen) throw new Error(`harness: ${id} has no web screen`)
+    const base = webSettings(manifest)?.path ?? ''
     const rest = { ...input }
-    let path = op.web.path
-    for (const p of op.web.pathParams) {
+    let path = screen.path
+    for (const p of screen.pathParams) {
       path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p] ?? '')))
       delete rest[p]
     }
@@ -180,7 +184,7 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
       return { ok: false, code, message: detail, presentation: true, ...(retry ? { retryAfter: Number(retry) } : {}) }
     }
 
-    if (op.web.kind !== 'form') {
+    if (screen.kind !== 'form') {
       for (const [k, v] of Object.entries(rest)) {
         if (v !== undefined && v !== null) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
       }
@@ -214,7 +218,7 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
   /** The facets this op is actually projected to, in CHANNELS order. */
   function channelsFor(id: string): Channel[] {
     const op = opOf(id)
-    return CHANNELS.filter((c) => (c === 'sdk' ? Boolean(op.sdk) : Boolean(op[c])))
+    return CHANNELS.filter((c) => op.facets[c] != null)
   }
 
   return {
@@ -229,18 +233,19 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
      */
     async callAsAgent(id: string, input: Record<string, unknown> = {}, opts: CallOptions = options): Promise<Outcome> {
       const op = opOf(id)
-      if (!op.rest) throw new Error(`harness: ${id} has no REST binding`)
+      const binding = restOf(op)
+      if (!binding) throw new Error(`harness: ${id} has no REST binding`)
       const rest = { ...input }
-      let path = op.rest.path
-      for (const p of op.rest.pathParams) {
+      let path = binding.path
+      for (const p of binding.pathParams) {
         path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p] ?? '')))
         delete rest[p]
       }
       const url = new URL(BASE_URL + path)
       const headers: Record<string, string> = { 'x-omniface-via': 'webmcp', 'x-omniface-client': 'facet-harness/0.0.1' }
       if (opts.apiKey) headers.authorization = `Bearer ${opts.apiKey}`
-      const init: RequestInit = { method: op.rest.method, headers }
-      if (op.rest.method === 'GET' || op.rest.method === 'DELETE') {
+      const init: RequestInit = { method: binding.method, headers }
+      if (binding.method === 'GET' || binding.method === 'DELETE') {
         for (const [k, v] of Object.entries(rest)) url.searchParams.set(k, typeof v === 'object' ? JSON.stringify(v) : String(v))
       } else {
         headers['content-type'] = 'application/json'
@@ -253,11 +258,12 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
     /** A write posted to its screen with no CSRF token, the way a cross-site form would arrive. */
     async postWithoutToken(id: string, input: Record<string, unknown> = {}, opts: CallOptions = options): Promise<Outcome> {
       const op = opOf(id)
-      if (op.web?.kind !== 'form') throw new Error(`harness: ${id} has no web form`)
-      const base = manifest.web?.path ?? ''
+      const screen = webOf(op)
+      if (screen?.kind !== 'form') throw new Error(`harness: ${id} has no web form`)
+      const base = webSettings(manifest)?.path ?? ''
       const rest = { ...input }
-      let path = op.web.path
-      for (const p of op.web.pathParams) {
+      let path = screen.path
+      for (const p of screen.pathParams) {
         path = path.replace(`{${p}}`, encodeURIComponent(String(rest[p] ?? '')))
         delete rest[p]
       }

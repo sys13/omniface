@@ -11,6 +11,8 @@ import { runConformanceFor } from './conformance-run.ts'
 import { runDiff } from './diff-run.ts'
 import { formatDiff } from './diff.ts'
 import { runMcpStdio } from './facets/mcp.ts'
+import { mcpTools } from './facets/mcp.facet.ts'
+import { webOf, webSettings } from './facets/web.facet.ts'
 import { inspectAll, inspectOp } from './inspect.ts'
 import { applyNamedTypeFixes } from './fix.ts'
 import { lint, type LintFinding } from './lint.ts'
@@ -82,14 +84,15 @@ async function main(argv: string[]): Promise<number> {
       serve(app, { port, inspector: true })
       const base = `http://localhost:${port}`
       const m = buildManifest(app)
+      const web = webSettings(m)
       process.stderr.write(
         [
           `omniface dev: ${app.name} v${app.version}`,
-          m.facets.rest ? `  REST       ${base}  (OpenAPI ${base}/openapi.json)` : '',
-          m.facets.mcp ? `  MCP        ${base}/mcp  (${m.mcpTools.length} tools)` : '',
-          m.web ? `  Web        ${base}${m.web.path}  (${m.ops.filter((o) => o.web).length} screens)` : '',
+          m.facets['rest'] ? `  REST       ${base}  (OpenAPI ${base}/openapi.json)` : '',
+          m.facets['mcp'] ? `  MCP        ${base}/mcp  (${mcpTools(m).length} tools)` : '',
+          web ? `  Web        ${base}${web.path}  (${m.ops.filter((o) => webOf(o)).length} screens)` : '',
           `  Inspector  ${base}/_omniface`,
-          m.cli ? `  CLI        node .omniface/cli/bin.mjs --base-url ${base}  (after omniface build)` : '',
+          m.facets['cli'] ? `  CLI        node .omniface/cli/bin.mjs --base-url ${base}  (after omniface build)` : '',
           '',
         ]
           .filter((l) => l !== '')
@@ -111,9 +114,12 @@ async function main(argv: string[]): Promise<number> {
         const all = inspectAll(app)
         if (json) process.stdout.write(JSON.stringify(all, null, 2) + '\n')
         else {
-          process.stdout.write(`${all.name} v${all.version} · plugins: ${all.plugins.join(', ') || 'none'} · ${all.mcpToolCount} MCP tools\n\n`)
+          const on = Object.keys(all.facets)
+          process.stdout.write(`${all.name} v${all.version} · plugins: ${all.plugins.join(', ') || 'none'} · facets: ${on.join(', ') || 'none'}\n\n`)
+          // One column per facet the app has, filled from what that facet said about the op.
+          const cell = (op: (typeof all.ops)[number], facet: string) => op.facets[facet]?.short ?? '—'
           for (const op of all.ops) {
-            process.stdout.write(`${op.id.padEnd(20)} ${(op.rest ? `${op.rest.method} ${op.rest.path}` : '—').padEnd(30)} ${(op.cli?.command ?? '—').padEnd(26)} ${op.mcp?.tool.name ?? '—'}\n`)
+            process.stdout.write(`${op.id.padEnd(20)} ${on.map((f) => cell(op, f).padEnd(28)).join(' ').trimEnd()}\n`)
           }
         }
         return 0
@@ -128,17 +134,10 @@ async function main(argv: string[]): Promise<number> {
       process.stdout.write(
         `${op.id}${op.description ? ` — ${op.description}` : ''}\n` +
           `traits: ${JSON.stringify(op.traits)}  source: ${op.source}\n` +
-          section('REST', op.rest && indent(op.rest.curl)) +
-          section('SDK', op.sdk && indent(op.sdk.snippet)) +
-          section('CLI', op.cli && indent(op.cli.snippet)) +
-          section('MCP', op.mcp && indent(JSON.stringify(op.mcp.tool, null, 2))) +
-          section(
-            'WEB',
-            op.web &&
-              indent(
-                `${op.web.screen.kind} · ${op.web.url}${op.web.screen.confirm ? ' · confirms' : ''}\n${op.web.screen.fields.join(', ') || '(no fields)'}`,
-              ),
-          ) +
+          // A section per facet the app has, in registry order, from what that facet presented.
+          Object.entries(op.facets)
+            .map(([, shown]) => section((shown?.label ?? '').toUpperCase(), shown?.snippet ? indent(shown.snippet) : null))
+            .join('') +
           section(
             'Pipeline',
             indent(

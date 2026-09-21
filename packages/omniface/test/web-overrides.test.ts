@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { renderIndex, renderScreen } from '../src/facets/web.ts'
 import { buildManifest, facet, type App } from '../src/index.ts'
 import { t } from '../src/zod/index.ts'
+import { webOf } from 'omniface'
 
 // Backlog 12.4: the override ladder for web — step 2 and step 3 of docs/DX.md. Every case here is
 // presentation over a screen the projection already derived; the ones that would *add* a screen,
@@ -37,7 +38,7 @@ function manifest(web: any) {
   return buildManifest(f.app({ name: 'acme', version: '0.1.0', ops, facets: { web } }) as unknown as App<any>)
 }
 
-const screen = (m: ReturnType<typeof manifest>, id: string) => m.ops.find((o) => o.id === id)!.web!
+const screen = (m: ReturnType<typeof manifest>, id: string) => webOf(m.ops.find((o) => o.id === id)!)!
 
 const row = { id: 'task_1', title: 'Water the plants', done: false, createdAt: '2026-09-18T10:00:00.000Z' }
 

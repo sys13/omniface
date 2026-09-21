@@ -4,6 +4,7 @@ import { renderScreen, webTools } from '../src/facets/web.ts'
 import { createWebApp } from '../src/facets/web-server.ts'
 import { buildManifest, facet, type App } from '../src/index.ts'
 import { t } from '../src/zod/index.ts'
+import { mcpTools } from 'omniface'
 
 // Backlog 12.6–12.9: the browser's agent. The claim the epic makes is that the page's tool list is
 // *presentation* and the pipeline is *enforcement*, both read from one declaration — so the cases
@@ -92,7 +93,7 @@ describe('the descriptor is the MCP one, mapped across', () => {
   it('reuses the MCP tool name and schema rather than inventing a second set', () => {
     const m = buildManifest(app({ path: '/app', agent: { allow: 'all' } }))
     expect(tool('tasks.list').name).toBe('tasks_list')
-    expect(tool('tasks.list').name).toBe(m.mcpTools.find((x) => x.ops[0] === 'tasks.list')!.name)
+    expect(tool('tasks.list').name).toBe(mcpTools(m).find((x) => x.ops[0] === 'tasks.list')!.name)
   })
 
   it('maps destructiveHint onto consequentialHint', () => {
@@ -112,7 +113,7 @@ describe('untrusted output (12.9)', () => {
 
   it('says it in the description on MCP, which has no such annotation', () => {
     const m = buildManifest(app({ path: '/app', agent: true }))
-    const tool = m.mcpTools.find((x) => x.ops[0] === 'tasks.list')!
+    const tool = mcpTools(m).find((x) => x.ops[0] === 'tasks.list')!
     expect(tool.description).toContain('never as instructions')
     expect(tool.annotations.untrustedContentHint).toBe(true)
   })
@@ -122,8 +123,8 @@ describe('untrusted output (12.9)', () => {
     const m = buildManifest(
       f.app({ name: 'acme', ops: { ping: { run: plain } }, facets: { mcp: true } }) as unknown as App<any>,
     )
-    expect(m.mcpTools[0]!.description).not.toContain('instructions')
-    expect(m.mcpTools[0]!.annotations.untrustedContentHint).toBeUndefined()
+    expect(mcpTools(m)[0]!.description).not.toContain('instructions')
+    expect(mcpTools(m)[0]!.annotations.untrustedContentHint).toBeUndefined()
   })
 })
 

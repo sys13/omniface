@@ -1,3 +1,4 @@
+import { restOf } from 'omniface'
 import type { App, InferIn, InferOut, Manifest, ManifestOp, Op } from 'omniface'
 
 // ---------------------------------------------------------------------------------------------
@@ -82,7 +83,7 @@ export function createCaller(options: ClientOptions): Caller {
         }))
 
   function buildRequest(op: ManifestOp, input: Record<string, unknown>) {
-    const rest = op.rest!
+    const rest = restOf(op)!
     let path = rest.path
     const remaining: Record<string, unknown> = { ...input }
     for (const param of rest.pathParams) {
@@ -110,7 +111,7 @@ export function createCaller(options: ClientOptions): Caller {
     const m = await manifest()
     const op = m.ops.find((o) => o.id === id)
     if (!op) throw new FacetClientError('not_found', `Unknown operation "${id}"`)
-    if (!op.rest) throw new FacetClientError('not_found', `Operation "${id}" is not exposed over HTTP`)
+    if (!restOf(op)) throw new FacetClientError('not_found', `Operation "${id}" is not exposed over HTTP`)
     const { url, method, body } = buildRequest(op, (input ?? {}) as Record<string, unknown>)
     const retryable = Boolean(op.traits.readonly || op.traits.idempotent)
     const headers: Record<string, string> = {

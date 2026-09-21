@@ -2,6 +2,7 @@ import { createHarness, outcomesAgree, type Channel, type Outcome } from '@omnif
 import type { AuditEntry, LogLine } from 'omniface/plugins'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createTasksApp, DEV_KEYS } from '../src/app.ts'
+import { cliOf, mcpOf, restOf, sdkOf } from 'omniface'
 
 const expectAgreement = (outcomes: Record<Channel, Outcome>, opts?: { compareValues?: boolean }) =>
   expect(outcomesAgree(outcomes, opts)).toEqual([])

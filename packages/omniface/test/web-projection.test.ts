@@ -4,6 +4,7 @@ import { diffManifests } from '../src/diff.ts'
 import { buildManifest, facet, type App } from '../src/index.ts'
 import { inspectOp } from '../src/inspect.ts'
 import { t } from '../src/zod/index.ts'
+import { webOf, webSettings } from 'omniface'
 
 // Backlog 12.1: the web projection in the manifest. The epic's claim is that a web console is a
 // *projection of declared ops*, like REST and the CLI are, rather than an application — so the
@@ -48,19 +49,19 @@ function app(facets: any = { web: true }): App<any> {
   return f.app({ name: 'acme', version: '0.1.0', ops, facets }) as unknown as App<any>
 }
 
-const screens = (a: App<any> = app()) => Object.fromEntries(buildManifest(a).ops.map((o) => [o.id, o.web]))
+const screens = (a: App<any> = app()) => Object.fromEntries(buildManifest(a).ops.map((o) => [o.id, webOf(o)]))
 
 describe('the web facet is opt-in', () => {
   it('is off when facets is omitted, unlike the four MVP facets', () => {
     const m = buildManifest(f.app({ name: 'acme', ops }) as unknown as App<any>)
-    expect(m.facets).toMatchObject({ rest: true, mcp: true, cli: true, sdk: true, web: false })
-    expect(m.web).toBeNull()
-    expect(m.ops.every((o) => o.web === null)).toBe(true)
+    expect(Object.keys(m.facets)).toEqual(['rest', 'mcp', 'cli', 'sdk'])
+    expect(webSettings(m)).toBeNull()
+    expect(m.ops.every((o) => webOf(o) === null)).toBe(true)
   })
 
   it('mounts at /app by default and takes a path', () => {
-    expect(buildManifest(app()).web).toEqual({ path: '/app', agent: false, agentCredential: 'session' })
-    expect(buildManifest(app({ web: { path: '/console' } })).web).toEqual({
+    expect(webSettings(buildManifest(app()))).toEqual({ path: '/app', agent: false, agentCredential: 'session' })
+    expect(webSettings(buildManifest(app({ web: { path: '/console' } })))).toEqual({
       path: '/console',
       agent: false,
       agentCredential: 'session',
@@ -102,7 +103,7 @@ describe('the screen kind is derived, never declared', () => {
   it('labels an op with no subject in its route by the action alone', () => {
     const whoami = f.op({ input: z.object({}), output: z.object({ id: z.string() }) }).traits({ readonly: true }).handle(() => ({ id: 'a' }))
     const m = buildManifest(f.app({ name: 'acme', ops: { auth: { whoami } }, facets: { web: true } }) as unknown as App<any>)
-    expect(m.ops[0]!.web).toMatchObject({ kind: 'detail', path: '/auth/whoami', title: 'Whoami' })
+    expect(webOf(m.ops[0]!)).toMatchObject({ kind: 'detail', path: '/auth/whoami', title: 'Whoami' })
   })
 
   it('adds a confirmation for destructive, and only for destructive', () => {
@@ -127,11 +128,11 @@ describe('an internal op has no screen at all', () => {
 describe('the rest of the toolchain sees the projection without being taught', () => {
   it('omniface inspect reports the screen and a URL you can open', () => {
     const a = app()
-    expect(inspectOp(a, 'tasks.get').web).toMatchObject({
+    expect(inspectOp(a, 'tasks.get').facets['web']?.detail).toMatchObject({
       url: 'http://localhost:3000/app/tasks/string',
       screen: { kind: 'detail' },
     })
-    expect(inspectOp(a, 'tasks.list').web!.url).toBe('http://localhost:3000/app/tasks')
+    expect(inspectOp(a, 'tasks.list').facets['web']?.detail).toMatchObject({ url: 'http://localhost:3000/app/tasks' })
   })
 
   it('omniface diff reports turning the facet on, and moving it', () => {

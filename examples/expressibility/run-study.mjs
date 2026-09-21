@@ -34,7 +34,7 @@ for (const subject of SUBJECTS) {
   try {
     const manifest = JSON.parse(await readFile(new URL(`./.out/${subject}/manifest.json`, import.meta.url), 'utf8'))
     ops = manifest.ops.length
-    tools = manifest.mcpTools.length
+    tools = (manifest.facets.mcp?.tools ?? []).length
   } catch {}
 
   const src = await readFile(new URL(`./src/${subject}.ts`, import.meta.url), 'utf8')

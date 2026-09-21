@@ -51,16 +51,17 @@ function show(id) {
   const op = data.ops.find((o) => o.id === id);
   document.querySelectorAll('nav button').forEach((b) => b.setAttribute('aria-current', b.dataset.id === id));
   const traits = Object.entries(op.traits).map(([k, v]) => '<span class="chip">' + esc(v === true ? k : k + ': ' + v) + '</span>').join('');
-  const mcp = op.mcp ? (op.mcp.group ? '<p>Part of grouped tool <b>' + esc(op.mcp.group) + '</b></p>' : '') + pre(JSON.stringify(op.mcp.tool, null, 2)) : off('Not exposed on MCP');
+  // One card per facet the app has, from what that facet presented. Nothing here names a facet,
+  // so a facet added as a module shows up in the inspector by landing.
+  const facets = Object.entries(op.facets).map(([name, shown]) =>
+    block(esc(shown ? shown.label : name), shown && shown.snippet ? pre(shown.snippet) : off('Not exposed on ' + esc(name)))
+  ).join('');
   const stages = op.pipeline.stages.map((s) => '<div class="stage' + (s.plugins.length ? '' : ' empty') + '"><b>' + s.stage + '</b>' + (s.plugins.map(esc).join(', ') || '—') + '</div>').join('<span>→</span>');
   document.getElementById('detail').innerHTML =
     '<h2>' + esc(op.id) + '</h2><p class="desc">' + esc(op.description || '') + (op.source !== 'app' ? ' · from ' + esc(op.source) : '') + '</p>' +
     '<div class="chips">' + (traits || '<span class="chip">no traits</span>') + '</div>' +
     '<div class="grid">' +
-      block('REST', op.rest ? pre(op.rest.curl) : off('Not exposed on REST')) +
-      block('SDK', op.sdk ? pre(op.sdk.snippet) : off('Not in the SDK')) +
-      block('CLI', op.cli ? pre(op.cli.snippet) : off('Not in the CLI')) +
-      block('MCP', mcp) +
+      facets +
       block('Pipeline' + (op.pipeline.wraps.length ? ' · wrapped by ' + esc(op.pipeline.wraps.join(', ')) : ''), '<div class="pipeline">' + stages + '</div>') +
       block('Input schema', pre(JSON.stringify(op.input, null, 2))) +
       block('Output schema', pre(JSON.stringify(op.output, null, 2))) +
@@ -69,8 +70,11 @@ function show(id) {
 }
 fetch('/_omniface/inspect.json').then((r) => r.json()).then((d) => {
   data = d;
-  const warn = d.mcpToolCount > 15 ? ' · <span class="warn">' + d.mcpToolCount + ' MCP tools (consider grouping)</span>' : ' · ' + d.mcpToolCount + ' MCP tools';
-  document.getElementById('meta').innerHTML = 'v' + esc(d.version) + ' · plugins: ' + esc(d.plugins.join(', ') || 'none') + warn;
+  // The MCP tool budget is MCP's own concern, read off that facet's settings rather than from a
+  // count the inspector was handed.
+  const tools = (d.facets.mcp && d.facets.mcp.tools || []).length;
+  const warn = tools > 15 ? ' · <span class="warn">' + tools + ' MCP tools (consider grouping)</span>' : tools ? ' · ' + tools + ' MCP tools' : '';
+  document.getElementById('meta').innerHTML = 'v' + esc(d.version) + ' · facets: ' + esc(Object.keys(d.facets).join(', ') || 'none') + ' · plugins: ' + esc(d.plugins.join(', ') || 'none') + warn;
   document.getElementById('ops').innerHTML = d.ops.map((o) => '<button data-id="' + esc(o.id) + '">' + esc(o.id) + (o.source !== 'app' ? ' <small>plugin</small>' : '') + '</button>').join('');
   document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => show(b.dataset.id)));
   const initial = decodeURIComponent(location.hash.slice(1));

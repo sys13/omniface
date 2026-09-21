@@ -7,6 +7,7 @@ import { build, facet, lint } from 'omniface'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import app from '../src/app.ts'
+import { cliOf, restOf } from 'omniface'
 
 describe('omniface lint', () => {
   it('is clean for the example app', () => {
@@ -64,7 +65,7 @@ describe('omniface build', () => {
     const help = execFileSync('node', [join(out, 'cli/bin.mjs'), '--help'], { encoding: 'utf8' })
     expect(help).toContain('tasks create <title>')
     const inspected = JSON.parse(execFileSync('node', [devcli, 'inspect', entry, 'tasks.delete', '--json'], { encoding: 'utf8' }))
-    expect(inspected.cli.snippet).toBe('tasks tasks delete task_1 --yes')
+    expect(inspected.facets['cli']?.snippet).toBe('tasks tasks delete task_1 --yes')
     rmSync(out, { recursive: true, force: true })
   })
 })
@@ -82,9 +83,9 @@ describe('omniface diff', () => {
     for (const op of published.ops) {
       // Three changes the working tree "makes", each landing on one facet: the CLI command was
       // renamed, delete was not destructive, and list's REST route has moved.
-      if (op.id === 'tasks.get') op.cli.command = ['tasks', 'show']
+      if (op.id === 'tasks.get') cliOf(op)!.command = ['tasks', 'show']
       if (op.id === 'tasks.delete') delete op.traits.destructive
-      if (op.id === 'tasks.list') op.rest.path = '/v0/tasks'
+      if (op.id === 'tasks.list') restOf(op)!.path = '/v0/tasks'
     }
     const baseline = join(out, 'published.json')
     writeFileSync(baseline, JSON.stringify(published))
@@ -99,7 +100,9 @@ describe('omniface diff', () => {
       stdout = e.stdout
     }
     expect(status).toBe(1)
-    expect(stdout).toContain('Breaks rest and cli, not mcp, sdk and web.')
+    // `destructive` is breaking on every facet that acts on it — the CLI prompt and the screen's
+    // question — and each facet answers for itself now, so web is named too.
+    expect(stdout).toContain('Breaks rest, cli and web, not mcp and sdk.')
     expect(stdout).toContain('[cli-command-renamed]')
     expect(stdout).toContain('[trait-destructive]')
     expect(stdout).toContain('[rest-route-changed]')

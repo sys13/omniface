@@ -1,6 +1,10 @@
 import { objectProperties, requiredProperties, type JSONSchema } from '../jsonschema.ts'
 import type { Manifest, ManifestOp } from '../manifest.ts'
 import { hoistNamedSchemas, resolveHoisted } from '../schemas.ts'
+import { cliOf } from './cli.facet.ts'
+import { mcpOf, mcpTools } from './mcp.facet.ts'
+import { restOf } from './rest.facet.ts'
+import { sdkOf } from './sdk.facet.ts'
 
 const problemSchema: JSONSchema = {
   type: 'object',
@@ -34,9 +38,12 @@ function without(schema: JSONSchema, keys: string[]): JSONSchema {
 function facetExtensions(op: ManifestOp): Record<string, unknown> {
   const out: Record<string, unknown> = { 'x-omniface-op': op.id, 'x-omniface-traits': op.traits }
   if (op.errors.length) out['x-omniface-errors'] = op.errors
-  if (op.sdk) out['x-omniface-sdk'] = { method: op.sdk.method }
-  if (op.cli) out['x-omniface-cli'] = { command: op.cli.command, args: op.cli.args, ...(op.cli.columns ? { columns: op.cli.columns } : {}) }
-  if (op.mcp) out['x-omniface-mcp'] = op.mcp
+  const sdk = sdkOf(op)
+  if (sdk) out['x-omniface-sdk'] = { method: sdk.method }
+  const cli = cliOf(op)
+  if (cli) out['x-omniface-cli'] = { command: cli.command, args: cli.args, ...(cli.columns ? { columns: cli.columns } : {}) }
+  const mcp = mcpOf(op)
+  if (mcp) out['x-omniface-mcp'] = mcp
   // Cursor pagination is a convention the whole app shares, so a generator only needs telling
   // which ops have it — the field names are the same on every one.
   if (op.traits.paginated) {
@@ -83,8 +90,9 @@ export function buildOpenApi(manifest: Manifest): JSONSchema {
     }
   }
   for (const op of manifest.ops) {
-    if (!op.rest) continue
-    const { method, path, status, pathParams } = op.rest
+    const rest = restOf(op)
+    if (!rest) continue
+    const { method, path, status, pathParams } = rest
     const io = hoisted.ops[op.id]!
     const inputSchema = resolveHoisted(io.input, hoisted)
     const props = objectProperties(inputSchema, root)
@@ -136,9 +144,7 @@ export function buildOpenApi(manifest: Manifest): JSONSchema {
     security: [{ bearer: [] }],
     'x-facet': {
       manifest: manifest.facet,
-      facets: manifest.facets,
-      ...(manifest.cli ? { cli: manifest.cli } : {}),
-      ...(manifest.sdk ? { sdk: manifest.sdk } : {}),
+      facets: Object.keys(manifest.facets),
     },
   }
 }

@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createCaller, FacetClientError, type ClientErrorCode } from '@omniface/client'
-import { presentFields, presentValue, tableColumns, type FieldPresentation } from 'omniface'
+import { cliOf, cliSettings, restOf, presentFields, presentValue, tableColumns, type FieldPresentation } from 'omniface'
 import type { CliCommandSpec, CliFlagSpec, JSONSchema, Manifest, ManifestOp } from 'omniface'
 
 // ---------------------------------------------------------------------------------------------
@@ -154,13 +154,14 @@ function resolveOp(manifest: Manifest, positionals: string[], plugin: PluginCli)
   for (const command of plugin.commands) {
     const words = command.words
     if (words.length <= positionals.length && words.every((w, i) => w === positionals[i]) && words.length > best.consumed) {
-      const op = manifest.ops.find((o) => o.id === command.op && o.cli)
+      const op = manifest.ops.find((o) => o.id === command.op && cliOf(o))
       if (op) best = { op, consumed: words.length }
     }
   }
   for (const op of manifest.ops) {
-    if (!op.cli) continue
-    const cmd = op.cli.command
+    const projection = cliOf(op)
+    if (!projection) continue
+    const cmd = projection.command
     if (cmd.length <= positionals.length && cmd.every((part, i) => part === positionals[i]) && cmd.length > best.consumed) {
       best = { op, consumed: cmd.length }
     }
@@ -176,8 +177,11 @@ function pad(s: string, n: number) {
 // Help
 
 function rootHelp(manifest: Manifest, bin: string, prefix: string[] = [], plugin: PluginCli = { flags: [], commands: [] }): string {
-  const ops = manifest.ops.filter((o) => o.cli && prefix.every((p, i) => o.cli!.command[i] === p))
-  const rows = ops.map((o) => [o.cli!.command.join(' ') + o.cli!.args.map((a) => ` <${kebab(a)}>`).join(''), o.description ?? ''])
+  const ops = manifest.ops.filter((o) => cliOf(o) && prefix.every((p, i) => cliOf(o)!.command[i] === p))
+  const rows = ops.map((o) => [
+    cliOf(o)!.command.join(' ') + cliOf(o)!.args.map((a: string) => ` <${kebab(a)}>`).join(''),
+    o.description ?? '',
+  ])
   if (!prefix.length) {
     for (const command of plugin.commands) rows.push([command.command, command.summary])
     rows.push(['login', 'Save an API key for this CLI'], ['logout', 'Remove saved credentials'])
@@ -208,7 +212,7 @@ function rootHelp(manifest: Manifest, bin: string, prefix: string[] = [], plugin
 }
 
 function opHelp(op: ManifestOp, bin: string): string {
-  const cli = op.cli!
+  const cli = cliOf(op)!
   const required = new Set<string>(op.input.required ?? [])
   const rows: [string, string][] = []
   for (const [name, schema] of Object.entries(props(op.input))) {
@@ -256,10 +260,10 @@ function renderHuman(op: ManifestOp, output: unknown, bin: string, allPages: boo
   if (output && typeof output === 'object' && Array.isArray((output as { items?: unknown }).items)) {
     const row = (props(op.output).items?.items ?? {}) as JSONSchema
     const fields = byName(presentFields(row, op.output))
-    const columns = tableColumns(row, op.output, op.cli?.columns)
+    const columns = tableColumns(row, op.output, cliOf(op)?.columns)
     const page = output as { items: Record<string, unknown>[]; nextCursor?: string | null }
     let text = renderTable(page.items, columns.length ? columns : Object.keys(page.items[0] ?? {}), fields)
-    if (page.nextCursor && !allPages) text += `\nMore results: ${bin} ${op.cli!.command.join(' ')} --cursor ${page.nextCursor}  (or --all)\n`
+    if (page.nextCursor && !allPages) text += `\nMore results: ${bin} ${cliOf(op)!.command.join(' ')} --cursor ${page.nextCursor}  (or --all)\n`
     return text
   }
   if (output && typeof output === 'object') {
@@ -294,7 +298,7 @@ async function writeCredentials(dir: string, creds: StoredCredentials): Promise<
 
 export async function runCli(options: RunCliOptions): Promise<number> {
   const { manifest } = options
-  const bin = options.binName ?? manifest.cli?.binName ?? manifest.name
+  const bin = options.binName ?? cliSettings(manifest)?.binName ?? manifest.name
   const env = options.env ?? process.env
   const io: CliIO = {
     stdout: options.io?.stdout ?? process.stdout,
@@ -355,7 +359,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
         if (!key) throw new UsageError(`Usage: ${bin} login --api-key <key>`)
         const probe = createCaller({ baseUrl, apiKey: key, manifest, fetch: options.fetch, retries: 0, clientName: `${bin}-cli/${manifest.version}`, via: 'cli' })
         let who = ''
-        if (manifest.ops.some((o) => o.id === 'auth.whoami' && o.rest)) {
+        if (manifest.ops.some((o) => o.id === 'auth.whoami' && restOf(o))) {
           const me = (await probe.call('auth.whoami')) as { id: string; kind: string }
           if (me.kind === 'anonymous') throw new FacetClientError('unauthenticated', 'That API key was not accepted')
           who = ` as ${me.id}`
@@ -370,7 +374,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
         return 0
       }
       const known = positionals.filter((p) => p !== 'help')
-      const isGroup = known.length > 0 && manifest.ops.some((o) => o.cli && known.every((p, i) => o.cli!.command[i] === p))
+      const isGroup = known.length > 0 && manifest.ops.some((o) => cliOf(o) && known.every((p, i) => cliOf(o)!.command[i] === p))
       if (command === undefined || command === 'help' || want('help') || isGroup) {
         io.stdout.write(rootHelp(manifest, bin, isGroup ? known : [], plugin))
         return command === undefined || command === 'help' || want('help') || isGroup ? 0 : 2
@@ -384,7 +388,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
     }
 
     // Build input: --json, then positionals, then flags.
-    const cli = op.cli!
+    const cli = cliOf(op)!
     const input: Record<string, unknown> = {}
     const json = flag('json')
     if (json !== undefined) {

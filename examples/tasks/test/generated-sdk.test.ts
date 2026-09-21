@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { build, buildManifest, createServer } from 'omniface'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createTasksApp, DEV_KEYS } from '../src/app.ts'
+import { restOf, sdkOf } from 'omniface'
 
 const run = promisify(execFile)
 const repoRoot = new URL('../../../', import.meta.url).pathname
@@ -149,15 +150,16 @@ describe('the generated SDK package', () => {
   it('has exactly the ops the manifest has, named the way the manifest names them', async () => {
     const manifest = buildManifest(createTasksApp({ logSink: () => {} }))
     const dts = await read('index.d.ts')
-    const expected = manifest.ops.filter((op) => op.sdk)
+    const expected = manifest.ops.filter((op) => sdkOf(op))
 
     for (const op of expected) {
-      const name = op.sdk!.method[op.sdk!.method.length - 1]!
+      const name = sdkOf(op)!.method[sdkOf(op)!.method.length - 1]!
       // A method is either a signature or — when it is paginated — a reference to its own
       // callable interface. Anything else means the op did not reach the SDK.
       const declared = new RegExp(`^ +(?:readonly ${name}: \\w+Method|${name}\\(input\\??: \\w+\\): Promise<\\w+>)$`, 'm')
       expect(dts, `${op.id} is missing from the generated SDK`).toMatch(declared)
-      if (op.rest) expect(dts).toContain(`\`${op.rest.method} ${op.rest.path}\``)
+      const rest = restOf(op)
+      if (rest) expect(dts).toContain(`\`${rest.method} ${rest.path}\``)
     }
     // And nothing extra: an SDK with a method the app does not have is the drift this repo exists
     // to prevent, and it would not be caught by checking each op in turn.
@@ -165,7 +167,7 @@ describe('the generated SDK package', () => {
     // `autoPaginate` members that are sugar, not ops.
     const clientInterface = dts.slice(dts.indexOf('export interface TasksClient {'))
     const methods = [...clientInterface.matchAll(/^ +(?:readonly (\w+): \w+Method|(\w+)\(input\??: )/gm)].map((m) => m[1] ?? m[2])
-    expect(methods.sort()).toEqual(expected.map((op) => op.sdk!.method[op.sdk!.method.length - 1]!).sort())
+    expect(methods.sort()).toEqual(expected.map((op) => sdkOf(op)!.method[sdkOf(op)!.method.length - 1]!).sort())
   })
 
   it('writes an OpenAPI document an outside generator can read', async () => {

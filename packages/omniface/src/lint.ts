@@ -1,5 +1,6 @@
 import type { App, NormalizedFacets } from './app.ts'
 import { objectProperties, type JSONSchema } from './jsonschema.ts'
+import { mcpOf, mcpTools } from './facets/mcp.facet.ts'
 import { buildManifest, type Manifest } from './manifest.ts'
 import { takeUnreachedTraitSchemas } from './traits.ts'
 
@@ -86,10 +87,12 @@ function overriddenOps(facets: NormalizedFacets, facet: keyof typeof OVERRIDE_KE
 export function lint(app: App, manifest: Manifest = buildManifest(app), options: LintOptions = {}): LintFinding[] {
   const findings: LintFinding[] = []
 
-  if (manifest.mcpTools.length > MCP_TOOL_BUDGET) {
+  const tools = mcpTools(manifest)
+  if (tools.length > MCP_TOOL_BUDGET) {
     const byNamespace = new Map<string, string[]>()
     for (const op of manifest.ops) {
-      if (op.mcp && 'tool' in op.mcp && op.path.length > 1) {
+      const mcp = mcpOf(op)
+      if (mcp && 'tool' in mcp && op.path.length > 1) {
         byNamespace.set(op.path[0]!, [...(byNamespace.get(op.path[0]!) ?? []), op.id])
       }
     }
@@ -100,12 +103,12 @@ export function lint(app: App, manifest: Manifest = buildManifest(app), options:
       level: 'warn',
       rule: 'mcp-tool-budget',
       message:
-        `${manifest.mcpTools.length} MCP tools (budget ${MCP_TOOL_BUDGET}). Agents choose tools less reliably past this. ` +
+        `${tools.length} MCP tools (budget ${MCP_TOOL_BUDGET}). Agents choose tools less reliably past this. ` +
         `Consider grouping by intent, e.g.:\n${suggestions.join('\n')}`,
     })
   }
 
-  if ((manifest.facets.cli || manifest.facets.sdk) && !manifest.facets.rest) {
+  if ((manifest.facets['cli'] || manifest.facets['sdk']) && !manifest.facets['rest']) {
     findings.push({
       level: 'error',
       rule: 'http-facets-need-rest',
@@ -176,10 +179,12 @@ export function lint(app: App, manifest: Manifest = buildManifest(app), options:
 
   // Override budget: step 3 of the ladder is for exceptions, and stops being an exception when
   // most of a facet is written that way (docs/DX.md).
-  for (const facet of ['rest', 'mcp', 'cli'] as const) {
+  // Every facet that is on and has declared what an override of it looks like. A facet with no
+  // entry in OVERRIDE_KEYS is simply not budget-checked, rather than being a hole in the loop.
+  for (const facet of Object.keys(OVERRIDE_KEYS) as (keyof typeof OVERRIDE_KEYS)[]) {
     if (!manifest.facets[facet]) continue
     const overridden = overriddenOps(app.facets, facet)
-    const projected = manifest.ops.filter((op) => op[facet]).length
+    const projected = manifest.ops.filter((op) => op.facets[facet] != null).length
     if (overridden.length >= OVERRIDE_BUDGET.min && projected > 0 && overridden.length / projected > OVERRIDE_BUDGET.ratio) {
       findings.push({
         level: 'warn',
