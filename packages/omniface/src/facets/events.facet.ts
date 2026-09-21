@@ -11,8 +11,15 @@ export type ManifestEvent = {
   description?: string
 }
 
-/** What the events facet does with one op: the events it declares. `null` if it declares none. */
-export type EventsProjection = { events: ManifestEvent[] }
+/**
+ * What the events facet does with one op: the events it declares. `null` if it declares none.
+ *
+ * The list is non-empty in the type, not by convention. An op that emits nothing gets `null`, so
+ * there is no projection an empty list could live in, and `project` is what proves it. Readers
+ * like `present` take the first event without a guard, and a refactor that starts projecting
+ * every op has to answer the compiler rather than quietly emitting `undefined` into a snippet.
+ */
+export type EventsProjection = { events: [ManifestEvent, ...ManifestEvent[]] }
 
 /**
  * The app's events, each with the ops that emit it. The catalog a transport reads: a webhook
@@ -83,14 +90,15 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
 
   project({ op }, config) {
     if (config.ops?.[op.id] === false) return null
-    if (!op.op.emits.length) return null
-    return {
-      events: op.op.emits.map((event) => ({
-        name: event.name,
-        payload: publicSchema(eventSchema(event)),
-        ...(event.description ? { description: event.description } : {}),
-      })),
-    }
+    // Destructured rather than length-checked: it is the same test, and it is the one the compiler
+    // reads as proof that `EventsProjection['events']` is non-empty.
+    const [first, ...rest] = op.op.emits.map((event) => ({
+      name: event.name,
+      payload: publicSchema(eventSchema(event)),
+      ...(event.description ? { description: event.description } : {}),
+    }))
+    if (!first) return null
+    return { events: [first, ...rest] }
   },
 
   settings(_app: App, _config, ops) {
@@ -167,7 +175,7 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
 
   present({ op }, projection) {
     const names = projection.events.map((event) => event.name)
-    const snippet = `app.subscribe((event) => {\n  if (event.event === '${names[0]}') console.log(event.payload)\n})`
+    const snippet = `app.subscribe((event) => {\n  if (event.event === '${projection.events[0].name}') console.log(event.payload)\n})`
     return {
       label: 'Events',
       short: names.join(', '),
