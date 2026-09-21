@@ -168,6 +168,8 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   That is all of it: there is no webhook sender, no SSE stream and no queue producer yet
   (BACKLOG 9.2, 9.3, 9.6), and an in-process sink is not a network transport. What the tests prove
   is the single source — one declaration, five ways in, the same event out.
+  `facets: { events: { ops: { 'tasks.archive': false } } }` keeps one op's declaration out of the
+  catalog; it only takes away, since an op that declares an event is already in.
 - **Auth adapters.** One `AuthAdapter` contract over identity providers, filling the pipeline's `authenticate`
   stage for every facet at once: API keys, JWT (issuer + JWKS, verified with WebCrypto), Better Auth, Clerk and
   WorkOS — no provider SDK and no runtime dependency. Several can run side by side; each declines what is not
