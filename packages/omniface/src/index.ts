@@ -1,5 +1,6 @@
-// The public surface of `facet`. Anything not re-exported from this file (or from `facet/zod`,
-// `facet/plugins`, `facet/rest`, `facet/mcp`) is internal and may change in any release.
+// The public surface of `omniface`. Anything not re-exported from this file (or from
+// `omniface/auth`, `omniface/zod`, `omniface/plugins`, `omniface/rest`, `omniface/mcp`) is
+// internal and may change in any release.
 // The tiers below, and what each promises, are documented in docs/API.md.
 
 // --- Core: defining and running an app -------------------------------------------------------
@@ -121,7 +122,7 @@ export { sdkOf, sdkSettings, type SdkProjection, type SdkSettings } from './face
 export { webOf, webSettings, type ManifestScreen, type WebSettings } from './facets/web.facet.ts'
 
 // --- Extension: authenticating a caller -------------------------------------------------------
-// The contract lives here; the adapters that implement it are `facet/auth`.
+// The contract lives here; the adapters that implement it are `omniface/auth`.
 export { defineAuthAdapter, type AuthAdapter, type AuthContext, type AuthSession } from './auth/adapter.ts'
 export {
   securityMiddleware,

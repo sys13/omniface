@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 
 const entry = new URL('../dist/devcli.js', import.meta.url)
 if (!existsSync(fileURLToPath(entry))) {
-  process.stderr.write('facet: not built. Run `pnpm build` (or reinstall the package).\n')
+  process.stderr.write('omniface: not built. Run `pnpm build` (or reinstall the package).\n')
   process.exit(1)
 }
 await import(entry.href)

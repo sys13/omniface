@@ -44,7 +44,7 @@ beyond what Deno polyfills), but nobody has asked, so nothing claims it.
 script packs the four packages exactly as a publish would, installs them into an empty directory —
 no clone, no workspace links — writes a small app, and then:
 
-- `facet --version`, `omniface lint`, `omniface build`, `omniface inspect`
+- `omniface --version`, `omniface lint`, `omniface build`, `omniface inspect`
 - the generated CLI package's `--help` and a real `tasks create`
 - `omniface dev` serving REST (create, read, a 404), `/.well-known/facet.json`, and MCP `tools/list`
 - `omniface build` against a `.ts` entry, on the runtimes that can load one

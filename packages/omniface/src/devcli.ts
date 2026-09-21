@@ -19,7 +19,7 @@ import { captureDefinitionSites } from './op.ts'
 import { buildManifest } from './manifest.ts'
 import { serve } from './server.ts'
 
-const USAGE = `facet — one definition, every interface
+const USAGE = `omniface — one definition, every interface
 
 Usage:
   omniface dev <entry> [--port 3000]     Serve REST, MCP (/mcp) and the inspector (/_omniface)
@@ -29,7 +29,7 @@ Usage:
   omniface lint <entry> [--fix]          Check the definition, optionally inserting t.named()
   omniface conformance <entry> [--strict] Prove every facet still agrees
   omniface diff <before> <after> [--strict]  What changed, and which facets it breaks
-  facet --version                     Print the facet version
+  omniface --version                     Print the omniface version
 
 <entry> is a module whose default export is a facet app.
 <before>/<after> are either such a module or a manifest.json from \`omniface build\`.
@@ -250,7 +250,7 @@ main(process.argv.slice(2)).then(
     process.exitCode = code
   },
   (err: Error) => {
-    process.stderr.write(`facet: ${err.message}\n`)
+    process.stderr.write(`omniface: ${err.message}\n`)
     process.exitCode = 1
   },
 )
