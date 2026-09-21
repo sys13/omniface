@@ -100,7 +100,13 @@ export type FacetServer = {
    * Not `FacetModule.order`, which is display order and asks a different question.
    */
   mountOrder?: number
-  create(app: App, manifest: Manifest, options: { security: boolean }): unknown
+  /**
+   * `security` has one value on purpose. `createServer` mounts CORS, CSRF and the security
+   * headers once at the root, before any facet, and hands every facet `false` to say so. A facet
+   * that applies security of its own reads the flag and defers; one that does not can ignore it.
+   * There is no value that means "mount it again", because the root mount already covers you.
+   */
+  create(app: App, manifest: Manifest, options: { security: false }): unknown
 }
 
 export type FacetModule<Config = any, Projection = any, Settings = any> = {
