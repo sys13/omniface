@@ -38,6 +38,14 @@ export {
   type OpsTree,
   type Principal,
 } from './op.ts'
+export {
+  defineEvent,
+  isEvent,
+  type Emit,
+  type EmittedEvent,
+  type EventDefinition,
+  type EventSink,
+} from './event.ts'
 export { ERROR_CODES, FacetError, errors, toFacetError, type ErrorCode, type FacetErrorOptions } from './errors.ts'
 export { paginate } from './pagination.ts'
 export { createServer, serve, type ServerOptions } from './server.ts'
@@ -120,6 +128,15 @@ export { mcpOf, mcpSettings, mcpTools, type McpProjection, type McpSettings } fr
 export { restOf, type RestProjection } from './facets/rest.facet.ts'
 export { sdkOf, sdkSettings, type SdkProjection, type SdkSettings } from './facets/sdk.facet.ts'
 export { webOf, webSettings, type ManifestScreen, type WebSettings } from './facets/web.facet.ts'
+export {
+  declaredEvents,
+  eventsOf,
+  eventsSettings,
+  type EventsConfig,
+  type EventsProjection,
+  type EventsSettings,
+  type ManifestEvent,
+} from './facets/events.facet.ts'
 
 // --- Extension: authenticating a caller -------------------------------------------------------
 // The contract lives here; the adapters that implement it are `omniface/auth`.

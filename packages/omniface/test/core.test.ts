@@ -103,13 +103,13 @@ describe('overrides', () => {
     expect(group.description).toContain('Actions:')
   })
 
-  it('omitting a facet turns it off; facets: undefined turns the four MVP facets on', () => {
+  it('omitting a facet turns it off; facets: undefined turns on every facet but web', () => {
     const m = buildManifest(notesApp({ rest: true }))
     // A facet that is off has no key at all: the record of what is on replaces the booleans.
     expect(Object.keys(m.facets)).toEqual(['rest'])
     expect(mcpTools(m)).toEqual([])
     // `web` stays off: it is opt-in even under `facets: undefined` (app.ts, WebConfig).
-    expect(Object.keys(buildManifest(notesApp()).facets)).toEqual(['rest', 'mcp', 'cli', 'sdk'])
+    expect(Object.keys(buildManifest(notesApp()).facets)).toEqual(['rest', 'mcp', 'cli', 'sdk', 'events'])
   })
 
   it('rejects overrides on unknown ops at runtime (and at compile time)', () => {

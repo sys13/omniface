@@ -52,9 +52,9 @@ function app(facets: any = { web: true }): App<any> {
 const screens = (a: App<any> = app()) => Object.fromEntries(buildManifest(a).ops.map((o) => [o.id, webOf(o)]))
 
 describe('the web facet is opt-in', () => {
-  it('is off when facets is omitted, unlike the four MVP facets', () => {
+  it('is off when facets is omitted, unlike every other facet that ships', () => {
     const m = buildManifest(f.app({ name: 'acme', ops }) as unknown as App<any>)
-    expect(Object.keys(m.facets)).toEqual(['rest', 'mcp', 'cli', 'sdk'])
+    expect(Object.keys(m.facets)).toEqual(['rest', 'mcp', 'cli', 'sdk', 'events'])
     expect(webSettings(m)).toBeNull()
     expect(m.ops.every((o) => webOf(o) === null)).toBe(true)
   })
