@@ -58,6 +58,34 @@ registerFacet(zapierFacet)
 | `contract` | What the generated conformance suite checks, without calling anything | no |
 | `serve` | How the facet mounts, **only if it is served**. Its `mountOrder` is the HTTP one: lower mounts first, and the first mount wins a route two facets both claim | no |
 
+## The `serve` hook
+
+`serve` is the only member with members of its own. A facet that has it is mounted by
+`createServer`; a facet without it is skipped, and nothing in the core knows which is which.
+
+| Member | What it answers | Required |
+| --- | --- | --- |
+| `mountOrder` | Where this facet mounts in the HTTP server. Lower mounts first, and Hono matches in registration order, so the first mount wins a route two facets both claim. Unset is `0`. Not `FacetModule.order`, which is display order | no |
+| `create` | Given the app, the manifest and `options`, the thing that serves this facet's routes | yes |
+
+The three served facets omniface ships claim `mcp: 0`, `web: 1`, `rest: 2`. The last two are the
+case the numbers exist for: a screen route and a REST route can be the same route, and the screen
+is meant to win.
+
+`create` is declared as returning `unknown`, and `createServer` casts the result to a Hono app
+before mounting it. In practice that means a served facet returns a Hono app today — that is what
+all three shipped ones do. Whether hono belongs on the facet-authoring surface at all, or whether
+`create` should return a plain `(request: Request) => Response` that `createServer` adapts, is an
+open question and not yet decided. Until it is, a facet that returns something else fails at
+runtime inside `createServer`, with a hono error that does not name the facet.
+
+`options.security` is a boolean, and `createServer` always passes `false`. It mounts CORS, CSRF and
+the security headers once at the root, where they cover MCP over HTTP and the inspector too, and
+the flag is how it tells a facet not to apply them a second time. A facet that applies security of
+its own reads it; one that does not can ignore it. `createRestApp` is the worked example: called
+directly it reads `facets.rest.security`, and called through `serve.create` it is handed `false`
+and defers to the root.
+
 ## A facet that is not a server
 
 `sdk` and `cli` have no `serve` hook and never will. Both run in another process, on nothing but
