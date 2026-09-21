@@ -309,6 +309,44 @@ describe('what a change to an event costs a consumer', () => {
     expect(back.find((c) => c.rule === 'event-payload-field-added')).toMatchObject({ level: 'additive' })
   })
 
+  // The consumer this catches is the furthest away of any: a webhook or queue reader in another
+  // process, often another language, that generated types from the catalog and recompiles against
+  // nothing. Before this the rename was silent here, and loud on the SDK.
+  it('calls a renamed payload type breaking for events, and exits `--strict` non-zero', () => {
+    const renamed = t.named('TaskRow', z.object({ id: t.id(), title: z.string() }))
+    const d = diffManifests(withEvents(one), withEvents([{ name: 'task.created', payload: renamed }]))
+    const change = d.changes.find((c) => c.rule === 'event-payload-type-renamed')
+    expect(change).toMatchObject({ level: 'breaking', facets: ['events'], op: 'create' })
+    expect(change!.message).toContain('carries TaskRow, was Task')
+    expect(d.breakingFacets).toContain('events')
+    // `omniface diff --strict` exits 1 on any breaking count, which is what it reads.
+    expect(d.counts.breaking).toBeGreaterThan(0)
+  })
+
+  // The facet observes type names, so the generic rule lists it as well when the op's own output
+  // type is renamed. The SDK's reading of that change does not move: same rule, same level, same
+  // message — `events` is added to the facets it breaks, not substituted for anything.
+  it('joins the SDK on the generic rename rule, without changing what the SDK reads', () => {
+    const withOutput = (output: AnySchema) =>
+      buildManifest(
+        facet().app({
+          name: 'acme',
+          ops: {
+            create: f
+              .op({ output: output as never })
+              .emits(defineEvent({ name: 'task.created', payload: output }))
+              .handle(() => null as any),
+          },
+        }) as unknown as App<any>,
+      )
+    const shape = { id: t.id(), title: z.string() }
+    const d = diffManifests(withOutput(t.named('Task', z.object(shape))), withOutput(t.named('TaskRow', z.object(shape))))
+    const generic = d.changes.find((c) => c.rule === 'type-renamed')!
+    expect(generic).toMatchObject({ level: 'breaking', message: 'create output type Task → TaskRow.' })
+    expect(generic.facets).toContain('sdk')
+    expect(generic.facets).toContain('events')
+  })
+
   it('calls an op that stops emitting altogether no longer exposed on the facet', () => {
     const none = buildManifest(
       facet().app({ name: 'acme', ops: { create: f.op({ output: Task }).handle(() => null as any) } }) as unknown as App<any>,

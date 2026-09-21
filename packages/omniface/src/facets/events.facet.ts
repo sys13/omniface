@@ -1,7 +1,7 @@
 import type { App } from '../app.ts'
 import { eventSchema } from '../event.ts'
 import { defineFacet, projectionOf, registerFacet, settingsOf, type FacetChange } from '../facet.ts'
-import { objectProperties, publicSchema, type JSONSchema } from '../jsonschema.ts'
+import { objectProperties, publicSchema, typeName, type JSONSchema } from '../jsonschema.ts'
 import type { Manifest, ManifestOp } from '../manifest.ts'
 
 /** One declared event, as it travels: the name a transport uses and the payload it carries. */
@@ -106,6 +106,12 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     return { events: [...catalog.values()].sort((a, b) => a.name.localeCompare(b.name)) }
   },
 
+  // A renamed `t.named()` type is breaking here for the same reason it is on the SDK: the catalog
+  // advertises the payload under that name, and a consumer generating types from it sees the
+  // change. It sees it further away than an SDK caller does — another process, often another
+  // language, recompiling against nothing.
+  observes: { typeNames: true },
+
   diff(before, after, { op }): FacetChange[] {
     const changes: FacetChange[] = []
     const was = byName(before.events)
@@ -135,6 +141,17 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
           rule: 'event-payload-field-removed',
           message: `${op}: "${name}" no longer carries ${gone.join(', ')}.`,
           detail: 'A consumer reading those fields gets undefined, on every transport at once.',
+        })
+      }
+      const wasType = typeName(before.payload)
+      const isType = typeName(after.payload)
+      if (wasType !== isType && (wasType || isType)) {
+        changes.push({
+          level: 'breaking',
+          rule: 'event-payload-type-renamed',
+          message: `${op}: "${name}" carries ${isType ?? '(unnamed)'}, was ${wasType ?? '(unnamed)'}.`,
+          detail:
+            'The catalog advertises the payload under that name. A consumer that generated types from it is holding the old one, and nothing it compiles against will tell it.',
         })
       }
       const added = [...nowFields].filter((field) => !wasFields.includes(field))

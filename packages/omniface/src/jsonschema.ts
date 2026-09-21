@@ -177,6 +177,12 @@ export function publicSchema(schema: JSONSchema): JSONSchema {
   return visit(schema)
 }
 
+/** The published name of a schema: what an SDK class, an OpenAPI component or an advertised event
+ * payload is called. A schema without one is structural, and renaming it is not a rename. */
+export function typeName(schema: JSONSchema | undefined): string | undefined {
+  return schema?.['x-omniface-name'] as string | undefined
+}
+
 export function typeOf(schema: JSONSchema | undefined): string | undefined {
   if (!schema) return undefined
   if (typeof schema.type === 'string') return schema.type
