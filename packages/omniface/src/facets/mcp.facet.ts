@@ -202,7 +202,7 @@ export const mcpFacet = defineFacet<McpConfig, McpProjection, McpSettings>({
   },
 
   serve: {
-    order: 0,
+    mountOrder: 0,
     create(app, manifest) {
       const handler = createMcpHttpHandler(app, manifest)
       const hono = new Hono()

@@ -116,7 +116,7 @@ export const restFacet = defineFacet<RestConfig, RestProjection, Record<string, 
   serve: {
     // After the web facet: a screen route and a REST route can be the same route, and the screen
     // wins.
-    order: 2,
+    mountOrder: 2,
     create: (app, manifest, options) => createRestApp(app, manifest, { security: options.security as false }),
   },
 })

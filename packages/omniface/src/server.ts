@@ -43,7 +43,7 @@ export function createServer(app: App, options: ServerOptions = {}): Hono {
   // server — `cli`, `sdk` — has no `serve` and is skipped; nothing here knows which is which.
   const served = facetModules()
     .filter((m) => m.serve && app.facets[m.name] != null)
-    .sort((a, b) => (a.serve!.order ?? 0) - (b.serve!.order ?? 0))
+    .sort((a, b) => (a.serve!.mountOrder ?? 0) - (b.serve!.mountOrder ?? 0))
   for (const module of served) {
     hono.route('/', module.serve!.create(app, manifest, { security: false }) as Hono)
   }

@@ -92,8 +92,14 @@ export type ContractContext = {
 }
 
 export type FacetServer = {
-  /** Lower mounts first. A screen route and a REST route can share a prefix; the screen wins. */
-  order?: number
+  /**
+   * Where this facet mounts in the HTTP server. Lower mounts first, and Hono matches in
+   * registration order, so the first mount wins a tie. A screen route and a REST route can be the
+   * same route; the screen wins.
+   *
+   * Not `FacetModule.order`, which is display order and asks a different question.
+   */
+  mountOrder?: number
   create(app: App, manifest: Manifest, options: { security: boolean }): unknown
 }
 
@@ -102,8 +108,9 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   name: string
 
   /**
-   * Where this facet sorts in the manifest, a diff report and the inspector. Lower first; a facet
-   * that does not ask sorts after everything that does, in registration order.
+   * Where this facet sorts in the manifest, a diff report and the inspector — display order, not
+   * mount order, which is `serve.mountOrder`. Lower first; a facet that does not ask sorts after
+   * everything that does, in registration order.
    *
    * It exists because registration order is not stable: a facet module is registered whenever it
    * is first imported, and which import wins depends on the entry point. The five omniface ships

@@ -227,7 +227,7 @@ export const webFacet = defineFacet<WebConfig, ManifestScreen, WebSettings>({
   serve: {
     // Before REST: a screen route and a REST route can be the same route, and the screen wins.
     // Its own CSP is set per response, inside the web app.
-    order: 1,
+    mountOrder: 1,
     create: (app, manifest) => createWebApp(app, manifest),
   },
 })

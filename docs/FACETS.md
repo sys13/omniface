@@ -43,7 +43,7 @@ registerFacet(zapierFacet)
 | Member | What it answers | Required |
 | --- | --- | --- |
 | `name` | The key in `facets` config, in the manifest and in a diff report | yes |
-| `order` | Where the facet sorts in output. Lower first; unset sorts last | no |
+| `order` | Where the facet sorts in output — display order, not mount order. Lower first; unset sorts last | no |
 | `defaultOn` | Whether the facet is on when the app says nothing about facets at all | yes |
 | `normalize` | What the app wrote under `facets.<name>`, as this facet's config. `null` is off | yes |
 | `project` | Given an op, what this facet does with it. `null` means it does not reach that op | yes |
@@ -56,7 +56,7 @@ registerFacet(zapierFacet)
 | `present` | One card in the inspector and one line in `llms.txt` | no |
 | `summary` | How `llms.txt` introduces the facet | no |
 | `contract` | What the generated conformance suite checks, without calling anything | no |
-| `serve` | How the facet mounts, **only if it is served** | no |
+| `serve` | How the facet mounts, **only if it is served**. Its `mountOrder` is the HTTP one: lower mounts first, and the first mount wins a route two facets both claim | no |
 
 ## A facet that is not a server
 
