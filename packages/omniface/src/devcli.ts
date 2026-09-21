@@ -11,8 +11,7 @@ import { runConformanceFor } from './conformance-run.ts'
 import { runDiff } from './diff-run.ts'
 import { formatDiff } from './diff.ts'
 import { runMcpStdio } from './facets/mcp.ts'
-import { mcpTools } from './facets/mcp.facet.ts'
-import { webOf, webSettings } from './facets/web.facet.ts'
+import { facetModules } from './facet.ts'
 import { inspectAll, inspectOp } from './inspect.ts'
 import { applyNamedTypeFixes } from './fix.ts'
 import { lint, type LintFinding } from './lint.ts'
@@ -84,15 +83,15 @@ async function main(argv: string[]): Promise<number> {
       serve(app, { port, inspector: true })
       const base = `http://localhost:${port}`
       const m = buildManifest(app)
-      const web = webSettings(m)
       process.stderr.write(
         [
-          `omniface dev: ${app.name} v${app.version}`,
-          m.facets['rest'] ? `  REST       ${base}  (OpenAPI ${base}/openapi.json)` : '',
-          m.facets['mcp'] ? `  MCP        ${base}/mcp  (${mcpTools(m).length} tools)` : '',
-          web ? `  Web        ${base}${web.path}  (${m.ops.filter((o) => webOf(o)).length} screens)` : '',
-          `  Inspector  ${base}/_omniface`,
-          m.facets['cli'] ? `  CLI        node .omniface/cli/bin.mjs --base-url ${base}  (after omniface build)` : '',
+          `omniface dev: ${app.name} v${app.version} on ${base}`,
+          // One line per facet the app has, from what that facet says about itself. Nothing here
+          // knows which facets exist, so a facet added as a module shows up in the banner too.
+          ...facetModules()
+            .filter((mod) => m.facets[mod.name] != null)
+            .map((mod) => `  ${mod.name.padEnd(10)} ${mod.summary?.(m.facets[mod.name]) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`}`),
+          `  ${'inspector'.padEnd(10)} ${base}/_omniface`,
           '',
         ]
           .filter((l) => l !== '')
