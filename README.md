@@ -151,6 +151,15 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   authoring guide is [PLUGINS.md](docs/PLUGINS.md), the starting point is
   [`examples/plugin-template`](examples/plugin-template), and `pluginCases()` from `@omniface/testing` runs any
   plugin against a sample app on all four facets.
+- **A facet is a module.** A facet declares a projection (given an op, what it does with it), a diff
+  contract (given two projections, whether the change breaks *this* facet), a presentation, a
+  conformance contract check, and a `serve` hook only if it is served — `sdk` and `cli` have none.
+  The five omniface ships are written against that contract, and nothing in the manifest builder,
+  `inspect`, `diff`, `build`, the server or `@omniface/testing` names a facet. A test registers a
+  throwaway facet and asserts it reaches the manifest, the inspector, `llms.txt`, `omniface diff`
+  and the conformance contract check with none of those files edited. What does *not* grow with it
+  yet is the conformance suite's live channels, which still drive each protocol from a hand-written
+  list — [FACETS.md](docs/FACETS.md) says so in the same words.
 - **Auth adapters.** One `AuthAdapter` contract over identity providers, filling the pipeline's `authenticate`
   stage for every facet at once: API keys, JWT (issuer + JWKS, verified with WebCrypto), Better Auth, Clerk and
   WorkOS — no provider SDK and no runtime dependency. Several can run side by side; each declines what is not

@@ -414,10 +414,14 @@ a new app starts from something, and a new facet shows up in it without being sp
 | 7.3 | `omniface dev` watch mode: reload on definition change | S | want | partial |
 | 7.4 | Playground surface for MCP and the CLI inside `omniface dev` | M | want | **moved → [11.4](#e11--playground)** |
 | 7.5 | `omniface init` templates | S | maybe | open |
-| 7.6 | The inspect layer takes a new facet without edits — the web projection (12.1) is the test case, and it must reach the page, the docs and `omniface diff` by landing once | S | — | open |
+| 7.6 | The inspect layer takes a new facet without edits — the web projection (12.1) is the test case, and it must reach the page, the docs and `omniface diff` by landing once | S | — | **partial** — a facet is now a module against a contract ([FACETS.md](FACETS.md)): it reaches the manifest, the inspector, `llms.txt`, `omniface diff` and the conformance **contract** check by landing once. The conformance suite's live channels still do not grow with it |
 
 **Done when:** editing an op reloads `/_omniface` without a restart, `omniface init` produces an app
 that already runs, and adding a facet adds a column rather than a patch.
+
+Adding a facet adds a column: `omniface inspect` and the inspector render one card per facet from
+what that facet presented, so neither names a facet. What is still special-cased is the live half
+of conformance — see the last section of [FACETS.md](FACETS.md).
 
 **Why it shrank:** running an op from the page turned out to be its own product — a form per
 schema, four rendered calls, a trace, an actor switcher, and a real question about what a write
