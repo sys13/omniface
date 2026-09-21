@@ -216,3 +216,37 @@ describe('what the form sends is what the op gets', () => {
     expect(store).toHaveLength(1)
   })
 })
+
+// #83: the mount order in `createServer` only decides anything when a screen route and a REST
+// route are the same route. With the default mount the two sets are disjoint, so this app moves
+// the screens to the root: `tasks.list` takes GET /tasks, which is where REST answers too.
+const rootApp = f.app({
+  name: 'acme',
+  version: '0.1.0',
+  ops: { tasks: { list, get, create, delete: remove, secret: hidden } },
+  facets: { rest: true, web: { path: '' } },
+}) as unknown as App<any>
+
+describe('a screen and a REST route on the same path', () => {
+  it('gives the route to the screen', async () => {
+    const res = await createServer(rootApp).request('/tasks', { headers: { accept: 'text/html' } })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/html')
+    const html = await res.text()
+    expect(html).toContain('<h2 class="screen">')
+    expect(html).toContain('Water the plants')
+  })
+
+  it('leaves REST answering where nothing collides', async () => {
+    // POST /tasks is `tasks.create`; the screen for it is GET/POST /tasks/new. Without this the
+    // first assertion would also pass if the web facet had swallowed every route.
+    const res = await createServer(rootApp).request('/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'From the API' }),
+    })
+    expect(res.headers.get('content-type')).toContain('json')
+    expect(res.status).toBeLessThan(300)
+    expect(store.map((r) => r.title)).toContain('From the API')
+  })
+})
