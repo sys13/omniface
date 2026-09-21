@@ -153,13 +153,21 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   plugin against a sample app on all four facets.
 - **A facet is a module.** A facet declares a projection (given an op, what it does with it), a diff
   contract (given two projections, whether the change breaks *this* facet), a presentation, a
-  conformance contract check, and a `serve` hook only if it is served — `sdk` and `cli` have none.
-  The five omniface ships are written against that contract, and nothing in the manifest builder,
+  conformance contract check, and a `serve` hook only if it is served — `sdk`, `cli` and `events`
+  have none. The six omniface ships are written against that contract, and nothing in the manifest builder,
   `inspect`, `diff`, `build`, the server or `@omniface/testing` names a facet. A test registers a
   throwaway facet and asserts it reaches the manifest, the inspector, `llms.txt`, `omniface diff`
   and the conformance contract check with none of those files edited. What does *not* grow with it
   yet is the conformance suite's live channels, which still drive each protocol from a hand-written
   list — [FACETS.md](docs/FACETS.md) says so in the same words.
+- **Declared events.** An op says what it emits — `.emits(TaskCreated)` — and that is the only place
+  it is said. The event's name and payload schema travel in the manifest beside the other
+  projections, `omniface inspect` and `llms.txt` show them, and `omniface diff` calls dropping an
+  event or a payload field breaking. `app.subscribe(sink)` receives what a handler emits, whichever
+  facet the call arrived on, validated against the declaration and with internal fields stripped.
+  That is all of it: there is no webhook sender, no SSE stream and no queue producer yet
+  (BACKLOG 9.2, 9.3, 9.6), and an in-process sink is not a network transport. What the tests prove
+  is the single source — one declaration, five ways in, the same event out.
 - **Auth adapters.** One `AuthAdapter` contract over identity providers, filling the pipeline's `authenticate`
   stage for every facet at once: API keys, JWT (issuer + JWKS, verified with WebCrypto), Better Auth, Clerk and
   WorkOS — no provider SDK and no runtime dependency. Several can run side by side; each declines what is not
