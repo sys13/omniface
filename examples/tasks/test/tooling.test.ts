@@ -102,7 +102,7 @@ describe('omniface diff', () => {
     expect(status).toBe(1)
     // `destructive` is breaking on every facet that acts on it — the CLI prompt and the screen's
     // question — and each facet answers for itself now, so web is named too.
-    expect(stdout).toContain('Breaks rest, cli and web, not mcp and sdk.')
+    expect(stdout).toContain('Breaks rest, cli and web, not mcp, sdk and events.')
     expect(stdout).toContain('[cli-command-renamed]')
     expect(stdout).toContain('[trait-destructive]')
     expect(stdout).toContain('[rest-route-changed]')
