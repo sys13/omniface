@@ -97,6 +97,9 @@ export type FacetServer = {
    * registration order, so the first mount wins a tie. A screen route and a REST route can be the
    * same route; the screen wins.
    *
+   * A facet that does not set one mounts after every facet that does, which is what
+   * `FacetModule.order` does with an unset `order`. Set one if a route of yours may collide.
+   *
    * Not `FacetModule.order`, which is display order and asks a different question.
    */
   mountOrder?: number

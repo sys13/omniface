@@ -1,7 +1,8 @@
+import { Hono } from 'hono'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { createWebApp, WEB_CSP } from '../src/facets/web-server.ts'
-import { buildManifest, facet, type App } from '../src/index.ts'
+import { buildManifest, defineFacet, facet, registerFacet, type App } from '../src/index.ts'
 import { createServer } from '../src/server.ts'
 import { t } from '../src/zod/index.ts'
 
@@ -248,5 +249,53 @@ describe('a screen and a REST route on the same path', () => {
     expect(res.headers.get('content-type')).toContain('json')
     expect(res.status).toBeLessThan(300)
     expect(store.map((r) => r.title)).toContain('From the API')
+  })
+})
+
+// #110: the three shipped facets all set a `mountOrder`, so the fixture above cannot see what an
+// unset one does. This one registers a served facet that does not set it, claiming a route the
+// web facet already claims. Unset sorts last, so the screen still wins; if unset read as `0` this
+// facet would mount ahead of `web` (1) and `rest` (2) and answer instead.
+// The route docs/FACETS.md documents for an out-of-tree facet's config key.
+declare module '../src/index.ts' {
+  interface FacetsConfig {
+    latecomer?: boolean
+  }
+}
+
+const latecomer = defineFacet<true, null>({
+  name: 'latecomer',
+  defaultOn: false,
+  normalize: (value) => (value === true ? true : null),
+  project: () => null,
+  serve: {
+    // No `mountOrder`. That is the point of the fixture.
+    create: () => {
+      const hono = new Hono()
+      hono.all('/tasks', (c) => c.text('latecomer'))
+      hono.all('/latecomer', (c) => c.text('latecomer'))
+      return hono
+    },
+  },
+})
+registerFacet(latecomer)
+
+const lateApp = f.app({
+  name: 'acme',
+  version: '0.1.0',
+  ops: { tasks: { list, get, create, delete: remove, secret: hidden } },
+  facets: { rest: true, web: { path: '' }, latecomer: true },
+}) as unknown as App<any>
+
+describe('a served facet that does not set a mountOrder', () => {
+  it('mounts after every facet that does', async () => {
+    const res = await createServer(lateApp).request('/tasks', { headers: { accept: 'text/html' } })
+    expect(await res.text()).not.toBe('latecomer')
+    expect(res.headers.get('content-type')).toContain('text/html')
+  })
+
+  it('is mounted, so the assertion above is about order and not about absence', async () => {
+    const res = await createServer(lateApp).request('/latecomer')
+    expect(await res.text()).toBe('latecomer')
   })
 })

@@ -65,12 +65,19 @@ registerFacet(zapierFacet)
 
 | Member | What it answers | Required |
 | --- | --- | --- |
-| `mountOrder` | Where this facet mounts in the HTTP server. Lower mounts first, and Hono matches in registration order, so the first mount wins a route two facets both claim. Unset is `0`. Not `FacetModule.order`, which is display order | no |
+| `mountOrder` | Where this facet mounts in the HTTP server. Lower mounts first, and Hono matches in registration order, so the first mount wins a route two facets both claim. Unset mounts last. Not `FacetModule.order`, which is display order | no |
 | `create` | Given the app, the manifest and `options`, the thing that serves this facet's routes | yes |
 
 The three served facets omniface ships claim `mcp: 0`, `web: 1`, `rest: 2`. The last two are the
 case the numbers exist for: a screen route and a REST route can be the same route, and the screen
 is meant to win.
+
+An unset `mountOrder` sorts after every facet that sets one, the same way an unset
+`FacetModule.order` sorts after every facet that asks. It read as `0` before, which put an
+out-of-tree facet whose author had not thought about mount order level with `mcp` and left the tie
+to registration order — and registration order depends on which import ran first, so the case with
+the least thought behind it had the least defined answer. Mounting last is not a good place either;
+it is a stated one. A facet with a route that may collide sets a number.
 
 `create` is declared as returning `unknown`, and `createServer` casts the result to a Hono app
 before mounting it. In practice that means a served facet returns a Hono app today — that is what
