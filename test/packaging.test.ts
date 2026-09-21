@@ -157,7 +157,10 @@ describe('public API surface', () => {
       'Caller', 'Client', 'ClientErrorCode', 'ClientOf', 'ClientOptions', 'FacetClientError', 'InferClient',
       'createCaller', 'createClient',
     ],
-    'packages/cli/dist/index.d.ts': ['CliIO', 'EXIT_CODES', 'RunCliOptions', 'runCli'],
+    'packages/cli/dist/index.d.ts': [
+      'CliIO', 'CredentialStore', 'EXIT_CODES', 'RunCliOptions', 'RunCommand', 'StoredCredentials',
+      'credentialStore', 'fileStore', 'runCli',
+    ],
     'packages/testing/dist/index.d.ts': [
       'ApiKeyStoreCaseOptions', 'BASE_URL', 'CHANNELS', 'CHECKS', 'CallOptions', 'CaseResult', 'Channel', 'Check',
       'ConformanceCase', 'ConformanceCoverage', 'ConformanceOptions', 'Harness', 'HarnessOptions', 'OpConformanceOptions',
