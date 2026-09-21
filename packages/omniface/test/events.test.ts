@@ -102,6 +102,51 @@ describe('the events projection', () => {
   })
 })
 
+describe('configuring the facet', () => {
+  it('refuses a config that is not one, instead of accepting it and ignoring it', () => {
+    f.app({
+      name: 'acme',
+      ops,
+      // @ts-expect-error — 'yes' is not an events config, and `{}` used to accept it
+      facets: { events: 'yes' },
+    })
+  })
+
+  it('takes an op out of the catalog without touching what the op declares', () => {
+    const a = f.app({ name: 'acme', ops, facets: { events: { ops: { 'tasks.create': false } } } }) as unknown as App<any>
+    expect(declaredEvents(buildManifest(a))).toEqual([])
+    expect(eventsOf(opOf(a, 'tasks.create'))).toBeNull()
+    // The declaration is still on the op. What changed is what the app advertises.
+    expect(ops.tasks.create.emits.map((e) => e.name)).toEqual(['task.created'])
+  })
+
+  it('still delivers to an in-process sink, because a projection is not a switch', () => {
+    const a = f.app({ name: 'acme', ops, facets: { events: { ops: { 'tasks.create': false } } } }) as unknown as App<any>
+    const seen: EmittedEvent[] = []
+    a.subscribe?.((event: EmittedEvent) => void seen.push(event))
+    return a.invoke('tasks.create', { title: 'A' }, { facet: 'rest' }).then(() => {
+      expect(seen.map((e) => e.event)).toEqual(['task.created'])
+    })
+  })
+
+  it('names the op id when the key is a typo', () => {
+    expect(() =>
+      f.app({
+        name: 'acme',
+        ops,
+        // @ts-expect-error — 'tasks.nope' is not an op id
+        facets: { events: { ops: { 'tasks.nope': false } } },
+      }),
+    ).toThrow(/unknown ops.*events\.ops: "tasks\.nope"/)
+  })
+
+  it('refuses an opt-out for an op that emits nothing, which would do nothing', () => {
+    expect(() => f.app({ name: 'acme', ops, facets: { events: { ops: { 'tasks.list': false } } } })).toThrow(
+      /facets\.events\.ops names "tasks\.list", which declares no events/,
+    )
+  })
+})
+
 describe('emitting', () => {
   it('delivers the declared event to a subscriber, whichever facet called', async () => {
     const a = app()

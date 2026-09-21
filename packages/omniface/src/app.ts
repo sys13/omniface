@@ -127,7 +127,7 @@ export interface FacetsConfig<Id extends string = string> {
   cli?: boolean | CliConfig<Id>
   sdk?: boolean | SdkConfig
   web?: boolean | WebConfig<Id>
-  events?: boolean | EventsConfig
+  events?: boolean | EventsConfig<Id>
 }
 
 export type AppConfig<T extends OpsTree, Ids extends string = OpIds<T>> = {

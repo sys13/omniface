@@ -21,7 +21,22 @@ export type EventsProjection = { events: ManifestEvent[] }
  */
 export type EventsSettings = { events: (ManifestEvent & { ops: string[] })[] }
 
-export type EventsConfig = {}
+/**
+ * What an app may say about its events. One key, and it only takes things away.
+ *
+ * `ops` is an opt-out: `{ ops: { 'tasks.archive': false } }` stops that op advertising what it
+ * emits. It is typed `false` rather than `boolean` because there is no opting *in* — an op that
+ * declares an event is already in, and a key that could be written `true` to no effect is the
+ * shape of config this project keeps filing issues about.
+ *
+ * There is nothing here about where events go. A webhook endpoint, a retry budget and a
+ * subscription belong to the transports (docs/BACKLOG.md 9.2, 9.3, 9.6), and each of those reads
+ * the catalog rather than being told again here.
+ */
+export type EventsConfig<Id extends string = string> = {
+  /** Ops that keep their `.emits()` declaration to themselves. A key naming no op fails `app()`. */
+  ops?: Partial<Record<Id, false>>
+}
 
 export const eventsOf = (op: ManifestOp): EventsProjection | null => projectionOf<EventsProjection>(op, 'events')
 export const eventsSettings = (manifest: Manifest): EventsSettings | null =>
@@ -53,8 +68,22 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
   defaultOn: true,
   normalize: (value) =>
     value === undefined || value === false ? null : value === true ? {} : (value as EventsConfig),
+  references: (config) => [{ where: 'events.ops', ids: Object.keys(config.ops ?? {}) }],
 
-  project({ op }) {
+  // An op that emits nothing has nothing to opt out of. The key is inert either way, so the only
+  // thing it can mean is that the author expected an event there and is not getting one.
+  check(config, ops) {
+    for (const id of Object.keys(config.ops ?? {})) {
+      // An id that is not an op at all is `references`' message to give, and it has not thrown yet.
+      const found = ops.get(id)
+      if (found && !found.op.emits.length) {
+        throw new Error(`facet: facets.events.ops names "${id}", which declares no events`)
+      }
+    }
+  },
+
+  project({ op }, config) {
+    if (config.ops?.[op.id] === false) return null
     if (!op.op.emits.length) return null
     return {
       events: op.op.emits.map((event) => ({
