@@ -1,4 +1,4 @@
-import { errors, facet, paginate, type AuthAdapter } from 'omniface'
+import { defineEvent, errors, facet, paginate, type AuthAdapter } from 'omniface'
 import {
   agentTokens,
   apiKeys,
@@ -37,6 +37,25 @@ const Task = t.named(
 type Task = z.infer<typeof Task>
 
 const TaskId = t.named('TaskId', z.object({ id: t.id({ example: 'task_1' }) }))
+
+// ---------------------------------------------------------------------------------------------
+// Events, once
+//
+// Declared here and nowhere else. A webhook sender, an SSE stream and a queue producer each read
+// this; none of them is told again what the event is called or what it carries. `internalScore` is
+// stripped from the payload for the same reason it is stripped from every facet's output.
+
+export const TaskCreated = defineEvent({
+  name: 'task.created',
+  payload: Task,
+  description: 'A task was created',
+})
+
+export const TaskCompleted = defineEvent({
+  name: 'task.completed',
+  payload: Task,
+  description: 'A task was marked done',
+})
 
 // ---------------------------------------------------------------------------------------------
 // The app
@@ -103,7 +122,8 @@ export function createTasksApp(options: TasksAppOptions = {}) {
           output: Task,
         })
         .traits({ scope: 'tasks:write' })
-        .handle(({ input, ctx }) => {
+        .emits(TaskCreated)
+        .handle(({ input, ctx, emit }) => {
           const task: Task = {
             id: `task_${++seq}`,
             title: input.title,
@@ -116,6 +136,7 @@ export function createTasksApp(options: TasksAppOptions = {}) {
           }
           tasks.set(task.id, task)
           ctx.log('task created', { taskId: task.id })
+          emit(TaskCreated, task)
           return task
         }),
 
@@ -154,9 +175,11 @@ export function createTasksApp(options: TasksAppOptions = {}) {
       complete: f
         .op({ description: 'Mark a task done', input: TaskId, output: Task, errors: ['not_found'] })
         .traits({ idempotent: true, scope: 'tasks:write' })
-        .handle(({ input }) => {
+        .emits(TaskCompleted)
+        .handle(({ input, emit }) => {
           const task = { ...find(input.id), done: true }
           tasks.set(task.id, task)
+          emit(TaskCompleted, task)
           return task
         }),
 
@@ -184,6 +207,7 @@ export function createTasksApp(options: TasksAppOptions = {}) {
     facets: {
       rest: true,
       sdk: true,
+      events: true,
       cli: {
         binName: 'tasks',
         ops: {

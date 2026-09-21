@@ -1,9 +1,11 @@
 import { adapterProblems, type PluginAdapters } from './adapters.ts'
 import { agentMayCall, type WebAgentConfig } from './agent.ts'
 import { FacetError, errors, toFacetError } from './errors.ts'
+import { eventSchema, type Emit, type EmittedEvent, type EventDefinition, type EventSink } from './event.ts'
 import { facetModules } from './facet.ts'
 import './facets/builtin.ts'
 import type { OAuthResourceConfig } from './facets/oauth.ts'
+import type { EventsConfig } from './facets/events.facet.ts'
 import type { SecurityConfig } from './facets/security.ts'
 import { stripInternal, toJSONSchema } from './jsonschema.ts'
 import { conventionalCommand, type HttpMethod } from './naming.ts'
@@ -125,6 +127,7 @@ export interface FacetsConfig<Id extends string = string> {
   cli?: boolean | CliConfig<Id>
   sdk?: boolean | SdkConfig
   web?: boolean | WebConfig<Id>
+  events?: boolean | EventsConfig<Id>
 }
 
 export type AppConfig<T extends OpsTree, Ids extends string = OpIds<T>> = {
@@ -174,6 +177,16 @@ export interface App<T extends OpsTree = OpsTree> {
   readonly oauth?: OAuthResourceConfig
   /** Run one op through the full pipeline. Every facet calls this; nothing else runs handlers. */
   invoke(id: string, rawInput: unknown, init: InvokeInit): Promise<unknown>
+  /**
+   * Receive every event the app's ops emit, whichever facet the call came in on. Returns the
+   * function that stops it.
+   *
+   * This is the in-process sink, and it is the only one that exists today. A webhook sender, an
+   * SSE stream and a queue producer are each a story of their own (`docs/BACKLOG.md` 9.2, 9.3,
+   * 9.6); what this settles is that none of them re-declares the event, because there is one
+   * place an event is declared and it is the op.
+   */
+  subscribe(sink: EventSink): () => void
   /** Type-only: the op tree, for inferred clients. */
   readonly '~ops'?: T
 }
@@ -254,16 +267,21 @@ function normalizeFacets(facets: FacetsConfig | undefined): NormalizedFacets {
  * `rest.ops`.
  */
 function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: NormalizedFacets, name: string): void {
+  const live = facetModules().filter((module) => facets[module.name] != null)
+
+  // Every `references` first, and the throw before any `check`. A `check` that reached a typo'd id
+  // would resolve it to `undefined` and crash with a stack, replacing the one message that names
+  // every facet's typos at once. Ordering it here means a facet's `check` may assume the ids it
+  // declared resolve, rather than each facet guarding for it.
   const unknown: string[] = []
-  for (const module of facetModules()) {
-    const config = facets[module.name]
-    if (config == null) continue
-    for (const { where, ids } of module.references?.(config) ?? []) {
+  for (const module of live) {
+    for (const { where, ids } of module.references?.(facets[module.name]) ?? []) {
       for (const id of ids) if (!ops.has(id)) unknown.push(`${where}: "${id}"`)
     }
-    module.check?.(config, ops, { name })
   }
   if (unknown.length) throw new Error(`facet: overrides reference unknown ops: ${unknown.join(', ')}`)
+
+  for (const module of live) module.check?.(facets[module.name], ops, { name })
 }
 
 function collectAdapters(
@@ -330,6 +348,8 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
     )
   }
 
+  const sinks = new Set<EventSink>()
+
   const hooksFor = (stage: HookStage) =>
     plugins.flatMap((p) => (p.hooks?.[stage] ? [p.hooks[stage]!] : []))
   const hooks = Object.fromEntries(
@@ -344,6 +364,18 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
     if (op.traits.internal && init.facet !== 'internal') throw errors.notFound(`Unknown operation "${id}"`)
 
     let responded = false
+    // What the handler asked to emit, in order, before it has been validated. An event is checked
+    // once the handler has returned rather than at the `emit()` call, so a handler that emits and
+    // then throws emits nothing: the work did not happen, and neither did the event.
+    const pending: { event: EventDefinition; payload: unknown }[] = []
+    const emitted: EmittedEvent[] = []
+    const emit: Emit = (event, payload) => {
+      if (!op.emits.some((declared) => declared.name === event.name)) {
+        throw errors.internal(`Operation "${id}" emitted "${event.name}", which it does not declare`)
+      }
+      pending.push({ event, payload })
+    }
+
     const inv: Invocation = {
       requestId: init.requestId ?? newRequestId(),
       facet: init.facet,
@@ -357,6 +389,7 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
       input: undefined,
       principal: anonymous,
       ctx: {},
+      emitted,
       output: undefined,
       respond(output) {
         responded = true
@@ -403,14 +436,37 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
           principal: inv.principal,
           facet: inv.facet,
           requestId: inv.requestId,
+          emit,
         })
         const checked = await validate(op.output, raw)
         if (!checked.ok) {
           throw errors.internal(`Operation "${id}" returned output that does not match its schema`, checked.issues)
         }
         inv.output = stripInternal(checked.value, registered.outputSchema)
+
+        // An event is checked against its declared schema for the same reason the output is: the
+        // declaration is what every transport advertises, and a payload that does not match it is
+        // a promise the app is breaking to a consumer that cannot see the handler.
+        for (const { event, payload } of pending) {
+          const schema = eventSchema(event)
+          const valid = await validate(event.payload, payload)
+          if (!valid.ok) {
+            throw errors.internal(
+              `Operation "${id}" emitted "${event.name}" with a payload that does not match its schema`,
+              valid.issues,
+            )
+          }
+          emitted.push({
+            event: event.name,
+            op: id,
+            requestId: inv.requestId,
+            payload: stripInternal(valid.value, schema),
+          })
+        }
       }
       await runStage('after')
+      // Delivered after the hooks, so an event a plugin can see is one that actually happened.
+      for (const event of emitted) for (const sink of sinks) await sink(event)
       return inv.output
     }
 
@@ -442,6 +498,10 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
     facets,
     ...(config.oauth ? { oauth: config.oauth } : {}),
     invoke,
+    subscribe(sink) {
+      sinks.add(sink)
+      return () => sinks.delete(sink)
+    },
   }
 }
 

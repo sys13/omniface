@@ -1,4 +1,5 @@
 import type { FacetAdapters } from './adapters.ts'
+import type { EmittedEvent } from './event.ts'
 import type { FacetName, Op, OpsTree, Principal } from './op.ts'
 import type { JSONSchema } from './jsonschema.ts'
 
@@ -49,6 +50,12 @@ export interface Invocation {
   principal: Principal
   /** Plugin-contributed context, visible to handlers as `ctx`. */
   ctx: Record<string, unknown>
+  /**
+   * What the handler emitted, declared by the op and already validated. Filled before `after`, so
+   * a plugin can record or forward events without being told what the app's events are. Empty
+   * when a hook answered instead of the handler: a replay did not do the work again.
+   */
+  readonly emitted: readonly EmittedEvent[]
   /** Set by a hook to answer without running the handler (e.g. an idempotency replay). */
   respond(output: unknown): void
   readonly responded: boolean

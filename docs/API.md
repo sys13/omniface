@@ -17,8 +17,9 @@ bump promises about it.
 | Name | What |
 | --- | --- |
 | `facet`, `Facet`, `App`, `AppConfig`, `FacetsConfig`, `OpIds`, `InvokeInit`, `NormalizedFacets` | The app factory and its configuration |
-| `RestConfig`, `RestOverride`, `CliConfig`, `CliOverride`, `McpConfig`, `McpOverride`, `McpToolGroup`, `SdkConfig`, `WebConfig`, `WebOverride` | Per-facet configuration and the typed overrides |
+| `RestConfig`, `RestOverride`, `CliConfig`, `CliOverride`, `McpConfig`, `McpOverride`, `McpToolGroup`, `SdkConfig`, `WebConfig`, `WebOverride`, `EventsConfig` | Per-facet configuration and the typed overrides |
 | `op`, `OpBuilder`, `OpConfig`, `OpFactory`, `Op`, `OpsTree`, `HandlerArgs`, `FacetName` | Operations: the builder, what a handler receives, where ops live |
+| `defineEvent`, `EventDefinition`, `isEvent`, `Emit`, `EmittedEvent`, `EventSink` | Declared events: what an op says it emits, what a handler emits with, and what a sink receives |
 | `Principal`, `anonymous` | Who is calling |
 | `errors`, `FacetError`, `FacetErrorOptions`, `ERROR_CODES`, `ErrorCode`, `toFacetError` | The one error model every facet renders |
 | `paginate` | Cursor pagination for a `paginated` op |
@@ -32,7 +33,7 @@ bump promises about it.
 | Name | What |
 | --- | --- |
 | `build`, `BuildOptions`, `BuildResult` | Write `.omniface/`: manifest, OpenAPI, `llms.txt`, the generated SDK package, the CLI package |
-| `buildManifest`, `Manifest`, `ManifestOp`, `ManifestTool`, `ManifestScreen`, `ManifestAdapters`, `MANIFEST_VERSION`, `isUntrusted` | The manifest every facet and the CLI engine read |
+| `buildManifest`, `Manifest`, `ManifestOp`, `ManifestTool`, `ManifestScreen`, `ManifestEvent`, `ManifestAdapters`, `MANIFEST_VERSION`, `isUntrusted` | The manifest every facet and the CLI engine read |
 | `inspectAll`, `inspectOp`, `OpInspection` | One op on every facet, as data |
 | `lint`, `LintFinding`, `LintOptions`, `MCP_TOOL_BUDGET`, `OVERRIDE_BUDGET` | The definition lints |
 | `planNamedTypeFixes`, `applyNamedTypeFixes`, `applyFixPlans`, `FixPlan`, `FixResult`, `FixIO`, `Unfixable`, `FixError` | What `omniface lint --fix` rewrites, and the check around it |
@@ -48,7 +49,7 @@ authoring guide is [FACETS.md](FACETS.md).
 | `facetModules`, `facetModule`, `enabledFacets` | The registry: every facet, in the order output uses |
 | `projectionOf`, `settingsOf` | Reading a facet's slot out of a manifest keyed by facet name |
 | `ProjectionContext`, `PresentationContext`, `ContractContext`, `FacetPresentation`, `FacetChange`, `FacetServer` | What each hook is handed and what it returns |
-| `restOf`, `mcpOf`, `mcpSettings`, `mcpTools`, `cliOf`, `cliSettings`, `sdkOf`, `sdkSettings`, `webOf`, `webSettings` | The five shipped facets' own accessors, and their projection and settings types |
+| `restOf`, `mcpOf`, `mcpSettings`, `mcpTools`, `cliOf`, `cliSettings`, `sdkOf`, `sdkSettings`, `webOf`, `webSettings`, `eventsOf`, `eventsSettings`, `declaredEvents` | The shipped facets' own accessors, and their projection and settings types (`RestProjection`, `CliProjection`, `EventsProjection`, `EventsSettings`, …) |
 
 **Extension — authenticating a caller.** The contract lives in the core because the pipeline reads
 it; the adapters that implement it are `omniface/auth`.

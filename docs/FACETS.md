@@ -105,9 +105,11 @@ here. The one-valued flag is the honest shape.
 
 ## A facet that is not a server
 
-`sdk` and `cli` have no `serve` hook and never will. Both run in another process, on nothing but
-the manifest, which is why a projection has to travel as data rather than as behaviour. A facet
-without a server is not a lesser facet; it is two of the five.
+`sdk`, `cli` and `events` have no `serve` hook. `sdk` and `cli` run in another process, on nothing
+but the manifest, which is why a projection has to travel as data rather than as behaviour.
+`events` is a declaration that other things read: an op says what it emits, and a transport that
+carries those events reads the catalog rather than being told again. A facet without a server is
+not a lesser facet; it is three of the six that ship.
 
 ## What a facet may not do
 

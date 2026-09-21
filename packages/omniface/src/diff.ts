@@ -1,5 +1,5 @@
 import { facetModule, facetModules, type ChangeLevel } from './facet.ts'
-import { objectProperties, requiredProperties, typeOf, type JSONSchema } from './jsonschema.ts'
+import { objectProperties, requiredProperties, typeName, typeOf, type JSONSchema } from './jsonschema.ts'
 import { MANIFEST_VERSION, type Manifest, type ManifestAdapters, type ManifestOp } from './manifest.ts'
 
 import './facets/builtin.ts'
@@ -131,11 +131,6 @@ function flattenFields(
     flattenFields(schema, root, path, next, out)
   }
   return out
-}
-
-/** The published name of a schema, which is what an SDK or OpenAPI component is called. */
-function typeName(schema: JSONSchema | undefined): string | undefined {
-  return schema?.['x-omniface-name'] as string | undefined
 }
 
 // ---------------------------------------------------------------------------------------------

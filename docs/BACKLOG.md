@@ -22,8 +22,10 @@ which is a registry dispute rather than work, and E5 to 5.4, which waits on some
 SDK in a second language. **E6 is next in the ordering.** E6–E8 widen the
 audience. E9–E10 grow the model itself and were not to start before the plugin API and the
 conformance story were settled, because both change the shape of every facet — that condition
-is now met, so 9.1 (declared events, and the thing 3.7 waits on) can be pulled forward if a
-user asks for it.
+is now met. **9.1 is built** (2026-09-21): an op declares its events, they are projected by a
+facet like everything else, and an in-process sink receives them. 3.7 was waiting on that and is
+no longer blocked; 9.2, 9.3 and 9.6 now have something to read from rather than a decision to
+repeat.
 
 **E11 and E12 are new (2026-09-19) and they move the boundary.** E11 pulls the playground out of
 E7, because running an op four ways from one page turned out to be the demo rather than a row in
@@ -200,8 +202,9 @@ way an outside one would be and passes `pluginCases()`, and
 compares the audit records field by field.
 
 **Still open, deliberately:** 3.6, 3.7 and 3.8 are `maybe` verdicts and were not built. Multi-tenancy
-(3.6) has a pipeline stage waiting for it (`resolveTenant`) but no user yet; quotas (3.7) want
-declared events from E9 to hang metering on; caching (3.8) needs a per-facet answer for what an ETag
+(3.6) has a pipeline stage waiting for it (`resolveTenant`) but no user yet; quotas (3.7) wanted
+declared events from E9 to hang metering on and now have them (9.1), so what is left there is a
+verdict rather than a dependency; caching (3.8) needs a per-facet answer for what an ETag
 means on MCP and the CLI before it is worth the surface.
 
 ---
@@ -476,7 +479,7 @@ long-running are `maybe` — they wait for a real slow op to design against.
 
 | ID | Story | Size | Verdict | Status |
 | --- | --- | --- | --- | --- |
-| 9.1 | Declared events (`op.emits(TaskCreated)`) — the foundation for everything below | M | want | open |
+| 9.1 | Declared events (`op.emits(TaskCreated)`) — the foundation for everything below | M | want | **done** — the declaration, its projection through the facet contract, and an in-process sink; no network transport |
 | 9.2 | Webhooks: signing, retries, replay | L | maybe | open |
 | 9.3 | Streaming ops (`stream: Event`) and their per-facet semantics | L | maybe | open |
 | 9.4 | Long-running ops (`async: true` → job handle): 202 + job URL, `await job.wait()`, CLI spinner, MCP progress | L | maybe | open |
@@ -484,7 +487,10 @@ long-running are `maybe` — they wait for a real slow op to design against.
 | 9.6 | Queue consumers (Kafka, SQS, NATS) — ops triggered by messages, after 9.1 | L | later | open |
 
 **Done when:** one declared event reaches a webhook, an SSE stream and a queue with no
-per-transport re-declaration.
+per-transport re-declaration. — not yet: none of those three exists. What 9.1 settled is the
+half that would otherwise be re-decided in each of them, and `examples/tasks/test/events.test.ts`
+drives one declaration in through all five facets and out to one sink. The transports are 9.2,
+9.3 and 9.6, and each reads the catalog rather than being told again.
 
 ---
 

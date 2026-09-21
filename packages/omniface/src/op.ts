@@ -1,4 +1,5 @@
 import type { ErrorCode } from './errors.ts'
+import type { Emit, EventDefinition } from './event.ts'
 import { emptyInput, type AnySchema, type InferIn, type InferOut } from './standard.ts'
 import type { OpTraits } from './traits.ts'
 
@@ -19,6 +20,12 @@ export type HandlerArgs<I, Ctx> = {
   principal: Principal
   facet: FacetName
   requestId: string
+  /**
+   * Emit one of the events this op declared with `.emits()`. An event the op did not declare is
+   * refused, and a payload that does not match the declared schema is refused, for the same
+   * reason the output is validated: what a caller was promised has to be what it gets.
+   */
+  emit: Emit
 }
 
 export interface Op<I extends AnySchema = AnySchema, O extends AnySchema = AnySchema> {
@@ -28,6 +35,8 @@ export interface Op<I extends AnySchema = AnySchema, O extends AnySchema = AnySc
   readonly description?: string
   readonly traits: OpTraits
   readonly errors: readonly ErrorCode[]
+  /** The events this op declares. Every asynchronous transport reads them from here. */
+  readonly emits: readonly EventDefinition[]
   readonly handler: (args: HandlerArgs<InferOut<I>, any>) => unknown
 }
 
@@ -42,6 +51,8 @@ export type OpConfig<I extends AnySchema, O extends AnySchema> = {
 
 export interface OpBuilder<I extends AnySchema, O extends AnySchema, Ctx> {
   traits(traits: OpTraits): OpBuilder<I, O, Ctx>
+  /** Declare the events this op emits. Said once here; read by every transport that carries them. */
+  emits(...events: readonly EventDefinition[]): OpBuilder<I, O, Ctx>
   handle(
     handler: (args: HandlerArgs<InferOut<I>, Ctx>) => InferIn<O> | Promise<InferIn<O>>,
   ): Op<I, O>
@@ -93,8 +104,15 @@ export function createOpFactory<Ctx>(): OpFactory<Ctx> {
   return <O extends AnySchema, I extends AnySchema = typeof emptyInput>(config: OpConfig<I, O>) => {
     // Captured here, not in `handle`: this is the call whose `input:` and `output:` a fix rewrites.
     const site = capturing ? callerSite() : undefined
-    const build = (traits: OpTraits): OpBuilder<I, O, Ctx> => ({
-      traits: (more) => build({ ...traits, ...more }),
+    const build = (traits: OpTraits, emits: readonly EventDefinition[]): OpBuilder<I, O, Ctx> => ({
+      traits: (more) => build({ ...traits, ...more }, emits),
+      emits: (...more) => {
+        const all = [...emits, ...more]
+        const names = all.map((e) => e.name)
+        const duplicate = names.find((name, i) => names.indexOf(name) !== i)
+        if (duplicate) throw new Error(`facet: op declares the event "${duplicate}" twice`)
+        return build(traits, all)
+      },
       handle: (handler) => {
         const built = Object.freeze({
           kind: 'omniface.op',
@@ -103,13 +121,14 @@ export function createOpFactory<Ctx>(): OpFactory<Ctx> {
           description: config.description,
           traits,
           errors: config.errors ?? [],
+          emits: Object.freeze([...emits]),
           handler: handler as Op<I, O>['handler'],
         })
         if (site) sites.set(built, site)
         return built
       },
     })
-    return build({})
+    return build({}, [])
   }
 }
 
