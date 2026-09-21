@@ -267,16 +267,21 @@ function normalizeFacets(facets: FacetsConfig | undefined): NormalizedFacets {
  * `rest.ops`.
  */
 function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: NormalizedFacets, name: string): void {
+  const live = facetModules().filter((module) => facets[module.name] != null)
+
+  // Every `references` first, and the throw before any `check`. A `check` that reached a typo'd id
+  // would resolve it to `undefined` and crash with a stack, replacing the one message that names
+  // every facet's typos at once. Ordering it here means a facet's `check` may assume the ids it
+  // declared resolve, rather than each facet guarding for it.
   const unknown: string[] = []
-  for (const module of facetModules()) {
-    const config = facets[module.name]
-    if (config == null) continue
-    for (const { where, ids } of module.references?.(config) ?? []) {
+  for (const module of live) {
+    for (const { where, ids } of module.references?.(facets[module.name]) ?? []) {
       for (const id of ids) if (!ops.has(id)) unknown.push(`${where}: "${id}"`)
     }
-    module.check?.(config, ops, { name })
   }
   if (unknown.length) throw new Error(`facet: overrides reference unknown ops: ${unknown.join(', ')}`)
+
+  for (const module of live) module.check?.(facets[module.name], ops, { name })
 }
 
 function collectAdapters(

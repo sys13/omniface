@@ -74,9 +74,8 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
   // thing it can mean is that the author expected an event there and is not getting one.
   check(config, ops) {
     for (const id of Object.keys(config.ops ?? {})) {
-      // An id that is not an op at all is `references`' message to give, and it has not thrown yet.
-      const found = ops.get(id)
-      if (found && !found.op.emits.length) {
+      // `references` declared these ids and `app()` has already thrown on any that do not resolve.
+      if (!ops.get(id)!.op.emits.length) {
         throw new Error(`facet: facets.events.ops names "${id}", which declares no events`)
       }
     }

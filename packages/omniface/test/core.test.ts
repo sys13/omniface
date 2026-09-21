@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { buildManifest, errors, facet, inspectOp, toJSONSchema, type FacetsConfig, type OpIds } from '../src/index.ts'
+import { buildManifest, defineFacet, errors, facet, inspectOp, registerFacet, toJSONSchema, type FacetsConfig, type OpIds } from '../src/index.ts'
 import { buildOpenApi } from '../src/facets/openapi.ts'
 import { redact, stripInternal } from '../src/jsonschema.ts'
 import { scopes } from '../src/plugins/index.ts'
@@ -123,6 +123,17 @@ describe('overrides', () => {
       }),
     ).toThrow(/unknown ops.*notes\.nope/)
   })
+
+  it('throws the unknown-ops message before any check runs, so a check need not guard', () => {
+    const { f, ops } = notesOps()
+    expect(() =>
+      f.app({
+        name: 'notes',
+        ops,
+        facets: { unguarded: { ops: ['notes.nope'] } },
+      }),
+    ).toThrow(/unknown ops.*unguarded\.ops: "notes\.nope"/)
+  })
 })
 
 describe('gates', () => {
@@ -242,3 +253,25 @@ describe('openapi + inspect', () => {
     expect(i.pipeline.stages.find((s) => s.stage === 'handle')!.plugins).toEqual(['handler'])
   })
 })
+
+// A facet whose `check` resolves its own referenced ids with `!`, the way `facet.ts` says a check
+// may. If `app()` ran checks before throwing on unknown ids, this one would raise a TypeError
+// with a stack instead of the `unknown ops` message naming the id — that is what it guards. Off
+// unless a test writes it, so it stays out of every other manifest in this file.
+declare module '../src/index.ts' {
+  interface FacetsConfig {
+    unguarded?: { ops: string[] }
+  }
+}
+
+const unguarded = defineFacet<{ ops: string[] }, null>({
+  name: 'unguarded',
+  defaultOn: false,
+  normalize: (value) => (value && typeof value === 'object' ? (value as { ops: string[] }) : null),
+  references: (config) => [{ where: 'unguarded.ops', ids: config.ops }],
+  check: (config, ops) => {
+    for (const id of config.ops) if (ops.get(id)!.op.emits.length) throw new Error('facet: unreachable')
+  },
+  project: () => null,
+})
+registerFacet(unguarded)

@@ -136,7 +136,13 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   /** Op ids this facet's config names, so a typo in an override key is caught at `app()`. */
   references?(config: Config): { where: string; ids: string[] }[]
 
-  /** Anything else the config must satisfy against the app's ops. Throw with a `facet:` message. */
+  /**
+   * Anything else the config must satisfy against the app's ops. Throw with a `facet:` message.
+   *
+   * Every id this facet declared in `references` resolves by the time this runs — `app()` throws
+   * on unknown ids first, so `ops.get(id)!` here is safe and a guard for the missing case is dead
+   * code. Reporting an id that does not exist is `references`' job, not this one's.
+   */
   check?(config: Config, ops: ReadonlyMap<string, RegisteredOp>, app: { name: string }): void
 
   /** Given an op, what this facet does with it. `null` means the facet does not reach this op. */
