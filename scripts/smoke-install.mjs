@@ -144,7 +144,11 @@ try {
   if (!dts.includes('export interface Task {')) fail('the generated SDK does not declare the named Task type')
 
   const inspected = JSON.parse(facet(facetBin, ['inspect', 'app.mjs', 'tasks.create', '--json']))
-  if (inspected.mcp.tool.name !== 'tasks_create') fail(`unexpected MCP tool name: ${inspected.mcp.tool.name}`)
+  // `inspect --json` carries a record keyed by facet name, and each facet fills in what it wants
+  // shown (manifest format 2).
+  const toolName = inspected.facets.mcp?.detail?.tool?.name
+  if (toolName !== 'tasks_create') fail(`unexpected MCP tool name: ${toolName}`)
+  if (inspected.facets.rest?.short !== 'POST /tasks') fail(`unexpected REST binding: ${inspected.facets.rest?.short}`)
 
   const cliHelp = run(process.execPath, [join(dir, '.omniface/cli/bin.mjs'), '--help'])  // a plain node ESM entry
   if (!cliHelp.includes('tasks create')) fail(`the generated CLI has no tasks create:\n${cliHelp}`)
