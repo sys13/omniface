@@ -1,12 +1,12 @@
 import { mkdtempSync, readFileSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { runCli } from '@omniface/cli'
+import { fileStore, runCli, type CredentialStore } from '@omniface/cli'
 import { buildManifest, createServer } from 'omniface'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createTasksApp, DEV_KEYS } from '../src/app.ts'
 
-function setup() {
+function setup(overrides: { credentials?: CredentialStore } = {}) {
   const app = createTasksApp({ logSink: () => {} })
   const server = createServer(app)
   const manifest = buildManifest(app)
@@ -18,6 +18,7 @@ function setup() {
       manifest,
       argv,
       configDir,
+      ...(overrides.credentials ? { credentials: overrides.credentials } : {}),
       retries: 0,
       env: { TASKS_API_KEY: DEV_KEYS.admin, TASKS_BASE_URL: 'http://facet.test', ...opts.env },
       fetch: async (i, init) => server.fetch(new Request(i, init)),
@@ -126,10 +127,35 @@ describe('generated CLI', () => {
     const ok = await cli.run(['login', '--api-key', DEV_KEYS.reader], { env: { TASKS_API_KEY: '' } })
     expect(ok.code).toBe(0)
     expect(ok.stdout).toContain('Logged in as user_reader')
-    const file = join(cli.configDir, 'credentials.json')
-    expect(JSON.parse(readFileSync(file, 'utf8'))).toMatchObject({ apiKey: DEV_KEYS.reader })
-    expect(statSync(file).mode & 0o777).toBe(0o600)
     const me = await cli.run(['auth', 'whoami'], { env: { TASKS_API_KEY: '' } })
     expect(JSON.parse(me.stdout)).toMatchObject({ id: 'user_reader' })
+
+    const out = await cli.run(['logout'], { env: { TASKS_API_KEY: '' } })
+    expect(out.code).toBe(0)
+    expect(JSON.parse((await cli.run(['auth', 'whoami'], { env: { TASKS_API_KEY: '' } })).stdout)).toMatchObject({
+      kind: 'anonymous',
+    })
+  })
+
+  it('puts the credential in the keyring and only the base URL on disk', async () => {
+    const keyring = new Map<string, string>()
+    const keyed = setup({
+      credentials: {
+        where: 'the test keyring',
+        read: async () => ({ ...(await fileStore(cli.configDir).read()), ...(keyring.has('k') ? { apiKey: keyring.get('k')! } : {}) }),
+        write: async ({ apiKey, ...rest }) => {
+          apiKey === undefined ? keyring.delete('k') : keyring.set('k', apiKey)
+          await fileStore(cli.configDir).write(rest)
+        },
+      },
+    })
+    const ok = await keyed.run(['login', '--api-key', DEV_KEYS.reader], { env: { TASKS_API_KEY: '' } })
+    expect(ok.stdout).toContain('Credential saved to the test keyring')
+    expect(keyring.get('k')).toBe(DEV_KEYS.reader)
+
+    const file = join(cli.configDir, 'credentials.json')
+    expect(readFileSync(file, 'utf8')).not.toContain(DEV_KEYS.reader)
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ baseUrl: 'http://facet.test' })
+    expect(statSync(file).mode & 0o777).toBe(0o600)
   })
 })

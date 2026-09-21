@@ -1,7 +1,9 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { createCaller, FacetClientError, type ClientErrorCode } from '@omniface/client'
+import { credentialStore, type CredentialStore } from './credentials.ts'
+
+export { credentialStore, fileStore, type CredentialStore, type RunCommand, type StoredCredentials } from './credentials.ts'
 import { presentFields, presentValue, tableColumns, type FieldPresentation } from 'omniface'
 import type { CliCommandSpec, CliFlagSpec, JSONSchema, Manifest, ManifestOp } from 'omniface'
 
@@ -22,8 +24,10 @@ export type RunCliOptions = {
   env?: Record<string, string | undefined>
   io?: Partial<CliIO>
   fetch?: typeof fetch
-  /** Where `login` stores credentials. Default ~/.config/<bin>. */
+  /** Where `login` stores what is not secret. Default ~/.config/<bin>. */
   configDir?: string
+  /** Overrides where the credential itself lives. Default: the OS keyring, falling back to the file. */
+  credentials?: CredentialStore
   defaultBaseUrl?: string
   retries?: number
 }
@@ -272,24 +276,6 @@ function renderHuman(op: ManifestOp, output: unknown, bin: string, allPages: boo
 }
 
 // ---------------------------------------------------------------------------------------------
-// Credentials
-
-type StoredCredentials = { baseUrl?: string; apiKey?: string }
-
-async function readCredentials(dir: string): Promise<StoredCredentials> {
-  try {
-    return JSON.parse(await readFile(join(dir, 'credentials.json'), 'utf8')) as StoredCredentials
-  } catch {
-    return {}
-  }
-}
-
-async function writeCredentials(dir: string, creds: StoredCredentials): Promise<void> {
-  await mkdir(dir, { recursive: true, mode: 0o700 })
-  await writeFile(join(dir, 'credentials.json'), JSON.stringify(creds, null, 2) + '\n', { mode: 0o600 })
-}
-
-// ---------------------------------------------------------------------------------------------
 // runCli
 
 export async function runCli(options: RunCliOptions): Promise<number> {
@@ -304,6 +290,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
   }
   const configDir = options.configDir ?? join(homedir(), '.config', bin)
   const prefix = envPrefix(bin)
+  const credentials = options.credentials ?? credentialStore({ dir: configDir, service: bin })
 
   try {
     // Commands come first (`tasks list --done`), so resolve the op from the leading words, then parse
@@ -325,7 +312,7 @@ export async function runCli(options: RunCliOptions): Promise<number> {
       return 0
     }
 
-    const stored = await readCredentials(configDir)
+    const stored = await credentials.read()
     // Empty env vars count as unset.
     const baseUrl = flag('base-url') || env[`${prefix}_BASE_URL`] || stored.baseUrl || options.defaultBaseUrl || 'http://localhost:3000'
     // A plugin may contribute another way to present the same credential (`adapters.cli`). The
@@ -360,12 +347,12 @@ export async function runCli(options: RunCliOptions): Promise<number> {
           if (me.kind === 'anonymous') throw new FacetClientError('unauthenticated', 'That API key was not accepted')
           who = ` as ${me.id}`
         }
-        await writeCredentials(configDir, { baseUrl, apiKey: key })
-        io.stdout.write(`Logged in${who}. Credentials saved to ${join(configDir, 'credentials.json')}\n`)
+        await credentials.write({ baseUrl, apiKey: key })
+        io.stdout.write(`Logged in${who}. Credential saved to ${credentials.where}\n`)
         return 0
       }
       if (command === 'logout') {
-        await writeCredentials(configDir, {})
+        await credentials.write({})
         io.stdout.write('Logged out.\n')
         return 0
       }

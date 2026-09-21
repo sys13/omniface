@@ -389,7 +389,7 @@ human judges on feel.
 
 | ID | Story | Size | Verdict | Status |
 | --- | --- | --- | --- | --- |
-| 6.1 | Keychain credential storage, replacing env-var-only auth | M | want | open |
+| 6.1 | Keychain credential storage, replacing env-var-only auth | M | want | **done** — the secret goes to the macOS keychain or libsecret, and `credentials.json` keeps only the base URL |
 | 6.2 | Shell completions (bash, zsh, fish) from the manifest | M | want | open |
 | 6.3 | `login` device flow against the auth adapters from E2 | M | want | open |
 | 6.4 | Single-binary distribution (`bun build --compile`) after the npm path is solid | M | — | open |
@@ -397,6 +397,27 @@ human judges on feel.
 
 **Done when:** `acme login`, tab completion and `acme tasks list --all | jq` all work
 against a deployed app.
+
+**6.1, and what it does not do.** `login` wrote the key into `credentials.json` in the clear, mode
+0600. That is the right floor and the wrong ceiling: file permissions stop another account reading
+it and stop nothing already running as this one — a backup, a `cat` in a screen share, a grep
+through a synced directory. The secret now goes to the macOS keychain or, on Linux, libsecret, and
+the file keeps only the base URL, which is not a secret. Windows keeps the 0600 file: its
+credential manager has no shipped command that reads a secret back out, so reaching it means DPAPI
+through PowerShell, which is more surface than this story is worth — and a fallback that quietly
+pretended otherwise would be worse than one that says so.
+
+Neither backend is reached through a native module. `keytar` would mean a compiled dependency in a
+CLI that currently has one workspace dependency and nothing else, so both backends shell out to the
+platform's own tool. On Linux the secret goes over stdin rather than argv, because argv is readable
+by every other process on the machine.
+
+A key written before this existed is still read, so an upgrade logs nobody out; the next `login`
+moves it and the file stops holding it. The keyring refusing — locked, no daemon, not installed —
+falls back to the file rather than failing the login.
+
+What this is not is 6.3. The credential still arrives as `--api-key` or a prompt; where it is
+*stored* changed and how it is *obtained* did not.
 
 ---
 

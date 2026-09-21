@@ -205,9 +205,10 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
   authorization server with `oauth: { authorizationServers: [...] }` and the app serves RFC 9728
   protected-resource metadata, and every refusal a credential would have fixed points at it, so an
   agent can find out where to sign in instead of being handed a token out of band. The scopes in
-  that document come from the ops' `scope` traits, not a second list. Still missing: the SDK
+  that document come from the ops' `scope` traits, not a second list. The CLI now keeps what
+  `login` accepts in the OS keyring rather than a file (backlog 6.1). Still missing: the SDK
   constructor option, a CLI `login` device flow, and the web facet's sign-in screen.
-- CLI keychain storage and completions; inspector try-it and live trace (backlog E11 — the playground).
+- CLI shell completions; inspector try-it and live trace (backlog E11 — the playground).
 - A web facet: declared ops rendered as screens, and offered to the browser's agent over WebMCP
   (backlog E12). New as of 2026-09-19, and it reverses two recorded decisions — the epic says why.
 - Streaming and long-running ops, webhooks, events.
