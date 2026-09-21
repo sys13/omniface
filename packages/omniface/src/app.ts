@@ -455,7 +455,6 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
             event: event.name,
             op: id,
             requestId: inv.requestId,
-            at: Date.now(),
             payload: stripInternal(valid.value, schema),
           })
         }

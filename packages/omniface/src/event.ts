@@ -30,7 +30,14 @@ export interface EventDefinition<S extends AnySchema = AnySchema> {
   readonly description?: string
 }
 
-/** What a sink is handed. The op and the request are on it, so a sink never has to be told them. */
+/**
+ * What a sink is handed. The op and the request are on it, so a sink never has to be told them.
+ *
+ * There is no timestamp. One was here and nothing read it, so nothing could keep it honest.
+ * An emission time belongs to the transport that needs it — signing, replay, ordering are all
+ * docs/BACKLOG.md 9.2 — and it comes back with the first consumer that reads it, stamped where
+ * the emit happens rather than where the invocation ends, and tested.
+ */
 export type EmittedEvent = {
   /** The declared event name. */
   readonly event: string
@@ -38,8 +45,6 @@ export type EmittedEvent = {
   readonly op: string
   /** The invocation it came out of, so a sink can correlate it with a log line or a trace. */
   readonly requestId: string
-  /** When the handler emitted it, as epoch milliseconds. */
-  readonly at: number
   /** Validated against the event's declared schema, with internal fields stripped. */
   readonly payload: unknown
 }

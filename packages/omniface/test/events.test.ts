@@ -114,6 +114,17 @@ describe('emitting', () => {
     expect(seen[0]!.requestId).toMatch(/^req_/)
   })
 
+  // The shape is pinned, not just spot-checked. A field a sink is handed and nothing reads is a
+  // field nothing can keep honest — `at` was one, and it went. This fails when one comes back
+  // without a reader, which is the moment to give it a test rather than three releases later.
+  it('hands a sink these fields and no others', async () => {
+    const a = app()
+    const seen: EmittedEvent[] = []
+    a.subscribe((event) => void seen.push(event))
+    await a.invoke('tasks.create', { title: 'A' }, { facet: 'rest' })
+    expect(Object.keys(seen[0]!).sort()).toEqual(['event', 'op', 'payload', 'requestId'])
+  })
+
   it('strips internal fields from the payload, as every other surface does', async () => {
     const a = app()
     const seen: EmittedEvent[] = []
