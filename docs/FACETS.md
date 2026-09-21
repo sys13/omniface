@@ -4,10 +4,13 @@ A facet is a module. It declares what it does with an op, what a change to that 
 own callers, and how it shows up in the inspector and the docs. Nothing in the core has to be
 taught that it exists.
 
-That was not true until recently. `ManifestOp` carried one hand-written key per facet,
+## Background: what it cost before format 2
+
+That was not true under manifest format 1. `ManifestOp` carried one hand-written key per facet,
 `Manifest.facets` repeated the same names as booleans, and `diff.ts` held 21 sites that named a
 facet. Adding the web facet cost edits in six files. None of them was hard, which is exactly why
-it mattered: the seventh facet would have cost the same six, forever.
+it mattered: the seventh facet would have cost the same six, forever. Format 2, described below,
+is what replaced it.
 
 ## The contract
 
