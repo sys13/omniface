@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { EXIT_CODES, runCli } from '@omniface/cli'
+import { EXIT_CODES, fileStore, runCli } from '@omniface/cli'
 import { createClient, FacetClientError } from '@omniface/client'
 import { buildManifest, cliOf, createServer, mcpOf, restOf, webOf, webSettings, type App, type Manifest } from 'omniface'
 import { createMcpServer } from 'omniface/mcp'
@@ -126,6 +126,10 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
       fetch: fetchFn,
       retries: 0,
       configDir,
+      // The CLI reaches for the OS keyring by default, which is right for a person and wrong here:
+      // a conformance run must answer from the app under test and nothing else on the machine.
+      // `configDir` and `env: {}` already say that; without this the keyring walks around both.
+      credentials: fileStore(configDir),
       env: {},
       io: { stdout: { write: (s) => void (stdout += s), isTTY: false }, stderr: { write: (s) => void (stderr += s) }, stdinIsTTY: false },
     })

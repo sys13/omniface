@@ -2,7 +2,11 @@
 // The quickstart, from a fresh directory with no clone: pack the packages, install them into an
 // empty project the way npm would, and drive a real app through every facet.
 //
-// Usage: node scripts/smoke-install.mjs [--keep] [--runtime node|bun]
+// Usage: node scripts/smoke-install.mjs [--keep] [--runtime node|bun] [--tarballs <manifest.json>]
+//
+// Packing runs `pnpm pack`, so it needs a Node pnpm supports. `--tarballs` takes the JSON that
+// `node scripts/pack.mjs <dir>` prints, so the packing and the install can happen on different
+// runtimes; without it the script packs for itself.
 
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -12,6 +16,7 @@ import { pack } from './pack.mjs'
 
 const keep = process.argv.includes('--keep')
 const runtime = process.argv[process.argv.indexOf('--runtime') + 1] ?? 'node'
+const manifest = process.argv.includes('--tarballs') ? process.argv[process.argv.indexOf('--tarballs') + 1] : null
 const isBun = runtime === 'bun'
 const PORT = 3000 + Math.floor(Math.random() * 1000)
 
@@ -77,7 +82,10 @@ function run(cmd, args, options = {}) {
 const facetCmd = (bin, args) => (isBun ? ['bun', [bin, ...args]] : [bin, args])
 const facet = (bin, args, options) => run(...facetCmd(bin, args), options)
 
-const tarballs = pack(mkdtempSync(join(tmpdir(), 'facet-tarballs-')))
+const tarballs = manifest ? JSON.parse(readFileSync(manifest, 'utf8')) : pack(mkdtempSync(join(tmpdir(), 'facet-tarballs-')))
+for (const [name, path] of Object.entries(tarballs)) {
+  if (!existsSync(path)) fail(`the tarball for ${name} is not at ${path}`)
+}
 const dir = mkdtempSync(join(tmpdir(), 'facet-smoke-'))
 log(`project at ${dir}`)
 

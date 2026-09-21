@@ -41,13 +41,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+      # Two Node versions on purpose, and they are not interchangeable. The workspace is built and
+      # packed with the Node the repo's pinned pnpm requires (pnpm 11 needs >= 22.13, so it crashes
+      # on 20.11); the matrix Node is the runtime we claim to support, and it only has to install
+      # the tarballs with npm and drive the facets. Collapsing these back into one setup-node
+      # breaks the 20.11 leg before any of the claim is tested.
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: node scripts/smoke-install.mjs
+      - run: mkdir -p "$RUNNER_TEMP/tarballs" && node scripts/pack.mjs "$RUNNER_TEMP/tarballs" > "$RUNNER_TEMP/tarballs.json"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: node scripts/smoke-install.mjs --tarballs "$RUNNER_TEMP/tarballs.json"
 
   install-bun:
     name: fresh install on bun

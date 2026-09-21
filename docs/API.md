@@ -126,6 +126,15 @@ rather than inferred — see [SDKS.md](SDKS.md).
 `runCli`, `RunCliOptions`, `CliIO`, `EXIT_CODES`. A generated CLI package is `bin.mjs` plus a
 manifest; everything it does lives here.
 
+`credentialStore`, `fileStore`, `CredentialStore`, `StoredCredentials`, `RunCommand` — where the
+credential `login` accepts lives between runs. The default puts the secret in the OS keyring (the
+macOS keychain, or libsecret on Linux) and leaves only the base URL in `credentials.json`;
+Windows, which has no shipped command that reads a secret back out of its credential manager,
+keeps the 0600 file. A key written before the keyring existed is still read, and moves the next
+time `login` runs. Pass `credentials` to `runCli` to put it somewhere else — `fileStore(dir)` is
+the right choice for a test or a harness, which should answer from the app and not from the
+machine it runs on.
+
 `protectedResourceMetadata`, `PROTECTED_RESOURCE_PATH`, `oauthChallenge`, `declaredScopes`,
 `OAuthResourceConfig` — where a caller with no credential goes to get one (RFC 9728). Discovery
 only: an app names somebody else's authorization server, and the scopes advertised are the ones its
