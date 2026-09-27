@@ -77,6 +77,15 @@ describe.each(PACKAGES)('packages/%s', (dir) => {
     expect(offenders).toEqual([])
   })
 
+  // tsc never removes output for a source that is gone, and `dist` ships whole, so a deleted or
+  // renamed file would otherwise keep publishing from the last build that saw it.
+  it('ships nothing in dist that has no source', () => {
+    const orphans = walk(join(base, 'dist'))
+      .map((f) => f.slice(base.length + 1))
+      .filter((f) => !existsSync(join(base, f.replace(/^dist/, 'src').replace(/(?:\.d\.ts|\.js)(?:\.map)?$/, '.ts'))))
+    expect(orphans, `if this names a file you deleted, the build is stale. ${BUILD_HINT}`).toEqual([])
+  })
+
   it('is publishable: files, license, repository, provenance', () => {
     // `src` ships so the declaration and source maps in `dist` resolve in a consumer's editor.
     // `facet` ships `bin` too: its bin is a committed launcher rather than a build output.
