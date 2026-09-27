@@ -126,7 +126,16 @@ async function main(argv: string[]): Promise<number> {
       const port = Number(flag(rest, 'port') ?? process.env.PORT ?? 3000)
       // Loopback unless asked: CORS, CSRF and the security headers ship closed, and so does this.
       const host = flag(rest, 'host') ?? '127.0.0.1'
-      serve(app, { port, host, inspector: true })
+      const server = serve(app, { port, host, inspector: true })
+      // `serve` returns before the socket is bound. The banner waits for it, so a client that reads
+      // the banner can connect at once, and a failed bind is one line and exit 1 rather than a
+      // banner for a server that never existed.
+      await new Promise<void>((listening, failed) => {
+        const onError = (err: NodeJS.ErrnoException) =>
+          failed(new Error(err.code === 'EADDRINUSE' ? `port ${port} is already in use on ${host}` : `cannot listen on ${host}:${port}: ${err.message}`))
+        server.once('error', onError)
+        server.once('listening', () => (server.off('error', onError), listening()))
+      })
       const shown = ['127.0.0.1', '0.0.0.0', '::'].includes(host) ? 'localhost' : host.includes(':') ? `[${host}]` : host
       const base = `http://${shown}:${port}`
       const m = buildManifest(app)

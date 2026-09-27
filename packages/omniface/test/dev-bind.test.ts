@@ -54,12 +54,6 @@ async function dev(...args: string[]): Promise<{ port: number; banner: string }>
     })
     child!.once('exit', (code) => fail(new Error(`omniface dev exited with ${code}:\n${banner}`)))
   })
-  // The banner is written as the server starts listening, not once it has: wait for loopback.
-  const deadline = Date.now() + 10_000
-  while (!(await reachable('127.0.0.1', port))) {
-    if (Date.now() > deadline) throw new Error(`omniface dev never listened on 127.0.0.1:${port}`)
-    await new Promise((r) => setTimeout(r, 100))
-  }
   return { port, banner }
 }
 
@@ -67,6 +61,8 @@ describe('omniface dev', () => {
   it('listens on loopback only unless told otherwise', async () => {
     const { port, banner } = await dev()
     expect(banner).toContain(`http://localhost:${port}`)
+    // No polling: the banner is written once the server is listening, so it can be dialled at once.
+    expect(await reachable('127.0.0.1', port)).toBe(true)
     const lan = lanAddress()
     if (lan) expect(await reachable(lan, port)).toBe(false)
   }, 20_000)
@@ -77,5 +73,23 @@ describe('omniface dev', () => {
     const { port } = await dev('--host', '0.0.0.0')
     // Proves the refusal above was the bind address, not a network that refuses everything.
     expect(await reachable(lan, port)).toBe(true)
+  }, 20_000)
+
+  it('says the port is taken, and prints no banner, when it cannot bind', async () => {
+    const port = await freePort()
+    const holder = createNetServer()
+    await new Promise<void>((done) => holder.listen(port, '127.0.0.1', done))
+    try {
+      child = spawn(process.execPath, [BIN, 'dev', ENTRY, '--port', String(port)], { stdio: ['ignore', 'ignore', 'pipe'] })
+      let stderr = ''
+      child.stderr!.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+      const code = await new Promise<number | null>((done) => child!.once('exit', done))
+      expect(code).not.toBe(0)
+      expect(stderr).toContain(String(port))
+      expect(stderr).not.toContain('omniface dev:')
+      expect(stderr.trim().split('\n')).toHaveLength(1)
+    } finally {
+      await new Promise((done) => holder.close(done))
+    }
   }, 20_000)
 })
