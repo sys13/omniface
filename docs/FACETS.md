@@ -43,6 +43,12 @@ export const zapierFacet = defineFacet<ZapierConfig, ZapierProjection, ZapierSet
 registerFacet(zapierFacet)
 ```
 
+`registerFacet` returns a function that takes the facet back out. A facet you ship ignores it. A
+test fixture facet passes it to `afterAll`, so the fixture does not reach other suites that share
+its module graph, as every suite in a worker does when vitest's file isolation is off. Only the
+call that added the module can remove it: registering a module that is already there returns a
+no-op, so there is no way to take out a facet you did not put in.
+
 | Member | What it answers | Required |
 | --- | --- | --- |
 | `name` | The key in `facets` config, in the manifest and in a diff report | yes |

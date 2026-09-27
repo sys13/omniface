@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { defineFacet, facet, registerFacet, type App } from '../src/index.ts'
 import { createServer } from '../src/server.ts'
@@ -121,7 +121,7 @@ const latecomer = defineFacet<true, null>({
     },
   },
 })
-registerFacet(latecomer)
+afterAll(registerFacet(latecomer))
 
 const lateApp = f.app({
   name: 'acme',

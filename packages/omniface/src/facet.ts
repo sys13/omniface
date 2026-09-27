@@ -209,14 +209,27 @@ export function defineFacet<Config, Projection, Settings = never>(
   return module
 }
 
-export function registerFacet(module: FacetModule<any, any, any>): void {
+/**
+ * Adds a facet to the registry, and returns what takes it back out. A real facet ignores the
+ * return; a test fixture calls it in `afterAll`, so the fixture does not outlive its file when
+ * files share a module graph (vitest with isolation off).
+ *
+ * Only the call that added the module can remove it. Registering a module that is already there
+ * hands back a no-op, so re-registering `restFacet` is not a way to unregister it — there is no
+ * reset, and no way to take out a facet you did not put in.
+ */
+export function registerFacet(module: FacetModule<any, any, any>): () => void {
   if (!/^[a-z][a-z0-9-]*$/.test(module.name)) {
     throw new Error(`omniface: facet name "${module.name}" must be lowercase kebab-case`)
   }
   if (RESERVED.has(module.name)) throw new Error(`omniface: "${module.name}" is a reserved manifest key`)
   const existing = registry.get(module.name)
   if (existing && existing !== module) throw new Error(`omniface: facet "${module.name}" is registered twice`)
+  if (existing) return () => {}
   registry.set(module.name, module)
+  return () => {
+    if (registry.get(module.name) === module) registry.delete(module.name)
+  }
 }
 
 /** Every registered facet, by `order` and then by registration. */
