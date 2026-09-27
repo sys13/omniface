@@ -1,0 +1,44 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { beforeAll, describe, expect, it } from 'vitest'
+
+// The bare `omniface` is the first thing a new user runs, and its usage block once named
+// `facet --version` — a binary that no longer existed — because nothing read it. This reads it.
+//
+// The bin loads `dist/devcli.js`, so this needs a build. `pnpm test` builds first; `pnpm test:only`
+// and a bare `vitest run` do not, and an unbuilt tree should say that rather than fail on a spawn.
+
+const PKG = join(import.meta.dirname, '..')
+const BIN = join(PKG, 'bin', 'omniface.mjs')
+const BUILD_HINT = 'Run `pnpm build` and try again.'
+
+beforeAll(() => {
+  if (!existsSync(join(PKG, 'dist', 'devcli.js'))) throw new Error(`Not built: packages/omniface/dist/devcli.js. ${BUILD_HINT}`)
+})
+
+const usage = () => execFileSync(process.execPath, [BIN], { encoding: 'utf8' })
+
+/** Every word the usage block offers as a command: the one after `omniface` on each usage line. */
+function commandsNamed(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => /^\s+omniface\s+(\S+)/.exec(line)?.[1])
+    .filter((c): c is string => c !== undefined)
+}
+
+/** The `case` labels in the dispatch, which is what actually decides whether a command exists. */
+function dispatched(): Set<string> {
+  const source = readFileSync(join(PKG, 'src', 'devcli.ts'), 'utf8')
+  return new Set([...source.matchAll(/^\s*case '([^']+)':/gm)].map((m) => m[1]!))
+}
+
+describe('omniface usage block', () => {
+  it('names only commands the dispatch handles', () => {
+    const named = commandsNamed(usage())
+    // A parse that finds nothing would make the check below vacuous.
+    expect(named.length).toBeGreaterThan(3)
+    const cases = dispatched()
+    expect(named.filter((c) => !cases.has(c)), `named in the usage block, with no \`case\` in src/devcli.ts. The usage is read from dist; if you just edited it, ${BUILD_HINT}`).toEqual([])
+  })
+})
