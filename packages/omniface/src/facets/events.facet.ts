@@ -113,11 +113,10 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     return { events: [...catalog.values()].sort((a, b) => a.name.localeCompare(b.name)) }
   },
 
-  // A renamed `t.named()` type is breaking here for the same reason it is on the SDK: the catalog
-  // advertises the payload under that name, and a consumer generating types from it sees the
-  // change. It sees it further away than an SDK caller does — another process, often another
-  // language, recompiling against nothing.
-  observes: { typeNames: true },
+  // No `observes.typeNames`. A renamed payload type is breaking here — the catalog advertises the
+  // payload under that name — but the payload is not the op's input or output, which is all the
+  // generic `type-renamed` rule compares. `event-payload-type-renamed` below compares the payload
+  // itself, so it fires on every rename a consumer can see and on none it cannot.
 
   diff(before, after, { op }): FacetChange[] {
     const changes: FacetChange[] = []
