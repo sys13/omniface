@@ -54,7 +54,7 @@ epic is not that it goes badly — it is that it succeeds and keeps going until 
 
 ## E1 — Release readiness
 
-**Goal:** `npm i facet` works, and a version number means something.
+**Goal:** `npm i omniface` works, and a version number means something.
 **Why:** packages are consumed as TypeScript source with no build step, so facet is
 currently usable only from inside this repo. Every other epic ships through this one.
 

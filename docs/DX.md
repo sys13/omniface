@@ -100,7 +100,7 @@ Gate 1 violation.
   (the AWS CLI approach). `@omniface/cli` handles parsing, output, auth, pagination and completions.
   `omniface build cli` outputs only a manifest snapshot, a bin wrapper with the app's own name (`acme`),
   and any custom commands written in code. Ship on npm first, then as a single binary via
-  `bun build --compile`. A generic `facet` CLI that loads the manifest at runtime is for dev only.
+  `bun build --compile`. A generic `omniface` CLI that loads the manifest at runtime is for dev only.
   Generated per-command source code is rejected: hand edits make it drift from the definition.
 - ~~MCP: automatic namespace grouping or explicit grouping?~~ **Decided: a mix.** One tool per op by
   default. Traits do most of the tidying: `internal`/`mcp: false` hides ops, `readonly`/`destructive`

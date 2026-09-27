@@ -114,7 +114,7 @@ put it in `hooks.authorize` (or `rateLimit`, or `idempotency`) instead.
 
 ### Typed slot reference
 
-Every type below is exported from `facet`.
+Every type below is exported from `omniface`.
 
 **`RestFacetAdapter`** — runs in the server process.
 
@@ -199,6 +199,6 @@ The kit checks that facet's promises survive your plugin. It cannot check what y
 - **Say what you require.** `requires: ['auth']` fails at startup with a message rather than at 3am
   with a stack trace.
 - **Put decisions in hooks, presentation in adapters.** The split is the whole design.
-- **Peer-depend on `facet`**, don't bundle it — one copy of the pipeline per app.
+- **Peer-depend on `omniface`**, don't bundle it — one copy of the pipeline per app.
 - **Ship the conformance test.** It is eight lines and it is the difference between "it works here"
   and "it works".

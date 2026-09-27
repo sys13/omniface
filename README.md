@@ -85,7 +85,7 @@ export default f.app({
 ## Quickstart
 
 ```sh
-npm install facet zod @omniface/cli    # @omniface/cli is the engine a generated CLI runs on
+npm install omniface zod @omniface/cli    # @omniface/cli is the engine a generated CLI runs on
 ```
 
 Put the definition above in `app.ts`, then:

@@ -1,11 +1,11 @@
-# facet
+# omniface
 
 Define an app's operations once, in code. Get every interface — REST, SDK, CLI, MCP — as a *facet*
 of that one definition. Cross-cutting concerns (auth, rate limiting, logging, audit) are plugins,
 not per-interface rework.
 
 ```sh
-npm install facet zod
+npm install omniface zod
 ```
 
 ```ts

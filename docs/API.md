@@ -1,16 +1,16 @@
 # Public API surface
 
 The rule: **a name re-exported from a package entry point is public. Everything else is internal
-and may change in any release.** The entry points are `facet`, `omniface/auth`, `omniface/zod`,
+and may change in any release.** The entry points are `omniface`, `omniface/auth`, `omniface/zod`,
 `omniface/plugins`, `omniface/rest`, `omniface/mcp`, `@omniface/client`, `@omniface/cli` and `@omniface/testing` —
 deep imports like
-`facet/dist/manifest.js` are not, and the `exports` map blocks them.
+`omniface/dist/manifest.js` are not, and the `exports` map blocks them.
 
 `test/packaging.test.ts` holds the full list of names, so adding or removing one is a visible diff
 on a file whose whole purpose is to be reviewed. [RELEASING.md](RELEASING.md) says what a version
 bump promises about it.
 
-## `facet`
+## `omniface`
 
 **Core — defining and running an app.** The surface an app author touches.
 
@@ -28,7 +28,7 @@ bump promises about it.
 | `createWebApp`, `WebAppOptions`, `WEB_CSP` | The web facet mounted: every screen as a route, with its own CSP and a CSRF token on every write |
 | `webTools`, `WebTool`, `agentMayCall`, `WebAgentConfig`, `AgentAllow` | What the page offers the browser's agent over WebMCP — one declaration, read by the registration and by the pipeline that refuses the rest |
 
-**Core — the tooling behind the `facet` bin.** Public because CI and editors call it directly.
+**Core — the tooling behind the `omniface` bin.** Public because CI and editors call it directly.
 
 | Name | What |
 | --- | --- |
@@ -87,7 +87,7 @@ facets that have to read what a schema advertises.
 | `presentFields`, `presentValue`, `tableColumns`, `humanLabel`, `MASK`, `FieldPresentation`, `FieldDisplay` | The one table of rules a facet aimed at a person renders fields by — the CLI's tables and the web facet's screens both read it |
 | `publicSchema`, `stripInternal`, `redact` | What `internal`, `sensitive` and `pii` mean in practice |
 
-### Other `facet` entry points
+### Other `omniface` entry points
 
 - **`omniface/zod`** — `t`: the Zod adapter, the trait helpers (`t.id`, `t.email`, `t.datetime`, …)
   and the pagination shapes (`t.pageInput`, `t.page`).
