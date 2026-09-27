@@ -99,6 +99,8 @@ export type FacetServer = {
    *
    * A facet that does not set one mounts after every facet that does, which is what
    * `FacetModule.order` does with an unset `order`. Set one if a route of yours may collide.
+   * Two facets that set the same number mount in display order — a tiebreak nobody chose, so
+   * do not rely on it.
    *
    * Not `FacetModule.order`, which is display order and asks a different question.
    */
@@ -222,7 +224,7 @@ export function facetModule(name: string): FacetModule | undefined {
   return registry.get(name)
 }
 
-/** The facet names an app has turned on, in registration order. */
+/** The facet names an app has turned on, in display order (`order`, then registration). */
 export function enabledFacets(facets: NormalizedFacets): string[] {
   return facetModules()
     .map((m) => m.name)

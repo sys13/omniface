@@ -47,10 +47,13 @@ export function createServer(app: App, options: ServerOptions = {}): Hono {
   // route two of them both claim. A facet that is not a server — `cli`, `sdk` — has no `serve`
   // and is skipped; nothing here knows which is which.
   //
+  // Two facets that set the same `mountOrder` mount in display order, not registration order:
+  // `facetModules()` already returns them sorted by `FacetModule.order`, and the sort is stable.
+  //
   // A facet that does not set `mountOrder` sorts last, as `facetModules` does with `order`. The
   // alternative was to read unset as 0, which put a facet whose author had not thought about
-  // mount order level with `mcp` and let registration order break the tie — and registration
-  // order is not stable.
+  // mount order level with `mcp` and let display order break the tie — a number set to answer a
+  // different question.
   const served = facetModules()
     .filter((m) => m.serve && app.facets[m.name] != null)
     .sort((a, b) => (a.serve!.mountOrder ?? Number.MAX_SAFE_INTEGER) - (b.serve!.mountOrder ?? Number.MAX_SAFE_INTEGER))
