@@ -43,7 +43,10 @@ Usage:
  * including the ones the one-line usage above has no room for.
  */
 const FLAGS: Record<string, [flag: string, description: string][]> = {
-  dev: [['--port <n>', 'Port to listen on (default: $PORT, then 3000)']],
+  dev: [
+    ['--port <n>', 'Port to listen on (default: $PORT, then 3000)'],
+    ['--host <addr>', 'Address to bind (default: 127.0.0.1; 0.0.0.0 to be reachable from other machines)'],
+  ],
   mcp: [],
   inspect: [['--json', 'Print JSON instead of text']],
   build: [['--out <dir>', 'Where to write (default: .omniface)']],
