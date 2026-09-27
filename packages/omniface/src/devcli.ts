@@ -35,7 +35,41 @@ Usage:
 
 <entry> is a module whose default export is a facet app.
 <before>/<after> are either such a module or a manifest.json from \`omniface build\`.
+\`omniface <command> --help\` lists every flag a command takes.
 `
+
+/**
+ * What `omniface <command> --help` adds to that command's usage line: every flag its `case` reads,
+ * including the ones the one-line usage above has no room for.
+ */
+const FLAGS: Record<string, [flag: string, description: string][]> = {
+  dev: [['--port <n>', 'Port to listen on (default: $PORT, then 3000)']],
+  mcp: [],
+  inspect: [['--json', 'Print JSON instead of text']],
+  build: [['--out <dir>', 'Where to write (default: .omniface)']],
+  lint: [
+    ['--fix', 'Wrap unnamed types in t.named(), then lint again to check the edit'],
+    ['--json', 'Print the findings as JSON'],
+  ],
+  conformance: [
+    ['--fixtures <file>', 'Fixtures module (default: conformance.fixtures.ts beside <entry>)'],
+    ['--op <id>', 'Run only this op; repeatable'],
+    ['--strict', 'Also fail when an op has no fixture input to generate its cases from'],
+    ['--json', 'Print the result as JSON'],
+  ],
+  diff: [
+    ['--strict', 'Exit 1 when a change is breaking'],
+    ['--quiet', 'Hide neutral changes'],
+    ['--json', 'Print the diff as JSON'],
+  ],
+}
+
+function commandHelp(command: string): string {
+  const lines = USAGE.split('\n').filter((l) => l.startsWith(`  omniface ${command} `))
+  const flags = FLAGS[command]!
+  const width = Math.max(...flags.map(([f]) => f.length), 10) + 2
+  return ['Usage:', ...lines, ...(flags.length ? ['', 'Flags:', ...flags.map(([f, d]) => `  ${f.padEnd(width)}${d}`)] : [])].join('\n') + '\n'
+}
 
 const { version: VERSION } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -72,6 +106,11 @@ async function relint(entry: string): Promise<LintFinding[]> {
 
 async function main(argv: string[]): Promise<number> {
   const [command, entry, ...rest] = argv
+  // Before the dispatch, which would otherwise load `--help` as the <entry>.
+  if (command && Object.hasOwn(FLAGS, command) && argv.slice(1).some((a) => a === '--help' || a === '-h')) {
+    process.stdout.write(commandHelp(command))
+    return 0
+  }
   switch (command) {
     case '--version':
     case '-v':

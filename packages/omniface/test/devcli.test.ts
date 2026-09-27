@@ -13,8 +13,10 @@ const PKG = join(import.meta.dirname, '..')
 const BIN = join(PKG, 'bin', 'omniface.mjs')
 const BUILD_HINT = 'Run `pnpm build` and try again.'
 
+const BUILT = existsSync(join(PKG, 'dist', 'devcli.js'))
+
 beforeAll(() => {
-  if (!existsSync(join(PKG, 'dist', 'devcli.js'))) throw new Error(`Not built: packages/omniface/dist/devcli.js. ${BUILD_HINT}`)
+  if (!BUILT) throw new Error(`Not built: packages/omniface/dist/devcli.js. ${BUILD_HINT}`)
 })
 
 const usage = () => execFileSync(process.execPath, [BIN], { encoding: 'utf8' })
@@ -40,5 +42,32 @@ describe('omniface usage block', () => {
     expect(named.length).toBeGreaterThan(3)
     const cases = dispatched()
     expect(named.filter((c) => !cases.has(c)), `named in the usage block, with no \`case\` in src/devcli.ts. The usage is read from dist; if you just edited it, ${BUILD_HINT}`).toEqual([])
+  })
+})
+
+/** The flags a command's `case` reads, whether through `flag(rest, 'x')` or a literal `'--x'`. */
+function flagsRead(command: string): string[] {
+  const source = readFileSync(join(PKG, 'src', 'devcli.ts'), 'utf8')
+  const start = source.indexOf(`case '${command}':`)
+  const end = source.slice(start + 1).search(/\n {4}(case |default:)/)
+  const body = source.slice(start, end === -1 ? undefined : start + 1 + end)
+  const names = [...body.matchAll(/flag\(rest, '([a-z-]+)'\)|'--([a-z-]+)'/g)].map((m) => `--${m[1] ?? m[2]}`)
+  return [...new Set(names)]
+}
+
+describe('omniface <command> --help', () => {
+  // Collected before `beforeAll` runs, so an unbuilt tree yields no cases here and the hint above.
+  const commands = BUILT ? commandsNamed(usage()).filter((c) => !c.startsWith('-')) : []
+
+  it.each(commands)('%s --help lists every flag its case reads', (command) => {
+    const help = execFileSync(process.execPath, [BIN, command, '--help'], { encoding: 'utf8' })
+    expect(help).toContain(`omniface ${command} `)
+    const listed = help.split('\n').map((l) => /^\s+(--[a-z-]+)/.exec(l)?.[1])
+    expect(flagsRead(command).filter((f) => !listed.includes(f))).toEqual([])
+  })
+
+  it('answers -h after an entry too, without loading it', () => {
+    const help = execFileSync(process.execPath, [BIN, 'lint', 'does-not-exist.ts', '-h'], { encoding: 'utf8' })
+    expect(help).toContain('--fix')
   })
 })
