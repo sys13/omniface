@@ -126,7 +126,7 @@ export function apiKeyTableSql(table: string = DEFAULT_API_KEY_TABLE): string {
 
 function assertIdentifier(name: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error(`facet: "${name}" is not a plain SQL identifier; table names are interpolated, not parameterised`)
+    throw new Error(`omniface: "${name}" is not a plain SQL identifier; table names are interpolated, not parameterised`)
   }
 }
 

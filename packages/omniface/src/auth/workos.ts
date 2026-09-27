@@ -48,7 +48,7 @@ function workOsScopes(claims: WorkOsClaims): string[] {
 }
 
 export function workosAdapter(options: WorkOsAdapterOptions): AuthAdapter {
-  if (!options.clientId) throw new Error('facet: workosAdapter() needs the WorkOS `clientId`')
+  if (!options.clientId) throw new Error('omniface: workosAdapter() needs the WorkOS `clientId`')
   const toScopes = options.scopes ?? workOsScopes
 
   return jwtAdapter({

@@ -54,7 +54,7 @@ function clerkScopes(claims: ClerkClaims): string[] {
 }
 
 export function clerkAdapter(options: ClerkAdapterOptions): AuthAdapter {
-  if (!options.issuer) throw new Error('facet: clerkAdapter() needs the instance `issuer`')
+  if (!options.issuer) throw new Error('omniface: clerkAdapter() needs the instance `issuer`')
   const toScopes = options.scopes ?? clerkScopes
   const parties = options.authorizedParties
 

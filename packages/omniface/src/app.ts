@@ -209,10 +209,10 @@ export function facet(config: { plugins?: readonly Plugin<any, any>[] } = {}): F
   const plugins = config.plugins ?? []
   const seen = new Set<string>()
   for (const plugin of plugins) {
-    if (seen.has(plugin.name)) throw new Error(`facet: plugin "${plugin.name}" is installed twice`)
+    if (seen.has(plugin.name)) throw new Error(`omniface: plugin "${plugin.name}" is installed twice`)
     for (const req of plugin.requires ?? []) {
       if (!seen.has(req)) {
-        throw new Error(`facet: plugin "${plugin.name}" requires "${req}" to be installed before it`)
+        throw new Error(`omniface: plugin "${plugin.name}" requires "${req}" to be installed before it`)
       }
     }
     seen.add(plugin.name)
@@ -230,7 +230,7 @@ function flatten(tree: OpsTree, source: string, prefix: string[], out: Map<strin
     const id = path.join('.')
     if (isOp(value)) {
       if (out.has(id)) {
-        throw new Error(`facet: op "${id}" from ${source} collides with one from ${out.get(id)!.source}`)
+        throw new Error(`omniface: op "${id}" from ${source} collides with one from ${out.get(id)!.source}`)
       }
       out.set(id, {
         id,
@@ -279,7 +279,7 @@ function checkOverrides(ops: ReadonlyMap<string, RegisteredOp>, facets: Normaliz
       for (const id of ids) if (!ops.has(id)) unknown.push(`${where}: "${id}"`)
     }
   }
-  if (unknown.length) throw new Error(`facet: overrides reference unknown ops: ${unknown.join(', ')}`)
+  if (unknown.length) throw new Error(`omniface: overrides reference unknown ops: ${unknown.join(', ')}`)
 
   for (const module of live) module.check?.(facets[module.name], ops, { name })
 }
@@ -323,7 +323,7 @@ function collectAdapters(
     for (const option of adapters.sdk?.options ?? []) claim(sdkOptions, option.name, owner, `the SDK option "${option.name}"`)
   }
 
-  if (problems.length) throw new Error(`facet: invalid plugin facet adapters:\n- ${problems.join('\n- ')}`)
+  if (problems.length) throw new Error(`omniface: invalid plugin facet adapters:\n- ${problems.join('\n- ')}`)
   return collected
 }
 
@@ -344,7 +344,7 @@ function createApp<T extends OpsTree>(config: AppConfig<T, string>, plugins: rea
   const scoped = [...ops.values()].filter((r) => r.op.traits.scope).map((r) => r.id)
   if (scoped.length && !plugins.some((p) => p.hooks?.authorize)) {
     throw new Error(
-      `facet: ops declare scopes (${scoped.join(', ')}) but no plugin enforces them. Add scopes() to plugins.`,
+      `omniface: ops declare scopes (${scoped.join(', ')}) but no plugin enforces them. Add scopes() to plugins.`,
     )
   }
 

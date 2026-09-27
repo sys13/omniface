@@ -83,7 +83,7 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     for (const id of Object.keys(config.ops ?? {})) {
       // `references` declared these ids and `app()` has already thrown on any that do not resolve.
       if (!ops.get(id)!.op.emits.length) {
-        throw new Error(`facet: facets.events.ops names "${id}", which declares no events`)
+        throw new Error(`omniface: facets.events.ops names "${id}", which declares no events`)
       }
     }
   },

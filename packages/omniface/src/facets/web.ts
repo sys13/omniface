@@ -545,7 +545,7 @@ export function renderScreen(manifest: Manifest, opId: string, ctx: ScreenContex
   const op = manifest.ops.find((o) => o.id === opId)
   const screen = op && webOf(op)
   if (!op || !screen) {
-    throw new Error(`facet web: "${opId}" has no screen. Declare the op, or write your own app against the SDK.`)
+    throw new Error(`omniface web: "${opId}" has no screen. Declare the op, or write your own app against the SDK.`)
   }
   const base = ctx.basePath ?? webSettings(manifest)?.path ?? ''
   const params = ctx.params ?? {}

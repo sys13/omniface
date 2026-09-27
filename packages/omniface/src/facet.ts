@@ -139,7 +139,7 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   references?(config: Config): { where: string; ids: string[] }[]
 
   /**
-   * Anything else the config must satisfy against the app's ops. Throw with a `facet:` message.
+   * Anything else the config must satisfy against the app's ops. Throw with an `omniface:` message.
    *
    * Every id this facet declared in `references` resolves by the time this runs — `app()` throws
    * on unknown ids first, so `ops.get(id)!` here is safe and a guard for the missing case is dead
@@ -204,11 +204,11 @@ export function defineFacet<Config, Projection, Settings = never>(
 
 export function registerFacet(module: FacetModule<any, any, any>): void {
   if (!/^[a-z][a-z0-9-]*$/.test(module.name)) {
-    throw new Error(`facet: facet name "${module.name}" must be lowercase kebab-case`)
+    throw new Error(`omniface: facet name "${module.name}" must be lowercase kebab-case`)
   }
-  if (RESERVED.has(module.name)) throw new Error(`facet: "${module.name}" is a reserved manifest key`)
+  if (RESERVED.has(module.name)) throw new Error(`omniface: "${module.name}" is a reserved manifest key`)
   const existing = registry.get(module.name)
-  if (existing && existing !== module) throw new Error(`facet: facet "${module.name}" is registered twice`)
+  if (existing && existing !== module) throw new Error(`omniface: facet "${module.name}" is registered twice`)
   registry.set(module.name, module)
 }
 

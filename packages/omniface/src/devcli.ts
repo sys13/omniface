@@ -269,7 +269,7 @@ async function main(argv: string[]): Promise<number> {
         for (const f of result.fixed) process.stdout.write(`fixed [${f.rule}] ${f.target} → t.named('${f.name}', …)  ${f.file}\n`)
         for (const u of result.unfixable) process.stdout.write(`kept  [${u.finding.rule}] ${u.reason}\n`)
         if (result.rolledBack) {
-          process.stderr.write(`\nfacet lint --fix changed nothing: ${result.rolledBack}\n`)
+          process.stderr.write(`\nomniface lint --fix changed nothing: ${result.rolledBack}\n`)
           return 1
         }
         if (result.fixed.length) {
