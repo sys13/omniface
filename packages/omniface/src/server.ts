@@ -63,7 +63,19 @@ export function createServer(app: App, options: ServerOptions = {}): Hono {
   return hono
 }
 
-export function serve(app: App, options: ServerOptions & { port?: number } = {}) {
+export function serve(
+  app: App,
+  options: ServerOptions & {
+    port?: number
+    /**
+     * The address to listen on. Left unset, Node listens on every interface, as it always has; a
+     * deployment that means that should say `0.0.0.0` (or `::`). `omniface dev` passes
+     * `127.0.0.1` unless told `--host`, so the dev server is not reachable from the network by
+     * default.
+     */
+    host?: string
+  } = {},
+) {
   const hono = createServer(app, options)
-  return serveNode({ fetch: hono.fetch, port: options.port ?? 3000 })
+  return serveNode({ fetch: hono.fetch, port: options.port ?? 3000, ...(options.host ? { hostname: options.host } : {}) })
 }

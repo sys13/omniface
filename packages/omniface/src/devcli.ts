@@ -22,7 +22,9 @@ import { serve } from './server.ts'
 const USAGE = `omniface — one definition, every interface
 
 Usage:
-  omniface dev <entry> [--port 3000]     Serve REST, MCP (/mcp) and the inspector (/_omniface)
+  omniface dev <entry> [--port 3000] [--host 127.0.0.1]
+                                         Serve REST, MCP (/mcp) and the inspector (/_omniface);
+                                         --host 0.0.0.0 to be reachable from other machines
   omniface mcp <entry>                   Serve MCP over stdio (key from <APP>_API_KEY)
   omniface inspect <entry> [op] [--json] Show an op on every facet
   omniface build <entry> [--out .omniface]  Write manifest, OpenAPI, llms.txt, the SDK and CLI packages
@@ -80,8 +82,11 @@ async function main(argv: string[]): Promise<number> {
     case 'dev': {
       const app = await loadApp(entry)
       const port = Number(flag(rest, 'port') ?? process.env.PORT ?? 3000)
-      serve(app, { port, inspector: true })
-      const base = `http://localhost:${port}`
+      // Loopback unless asked: CORS, CSRF and the security headers ship closed, and so does this.
+      const host = flag(rest, 'host') ?? '127.0.0.1'
+      serve(app, { port, host, inspector: true })
+      const shown = ['127.0.0.1', '0.0.0.0', '::'].includes(host) ? 'localhost' : host.includes(':') ? `[${host}]` : host
+      const base = `http://${shown}:${port}`
       const m = buildManifest(app)
       process.stderr.write(
         [
