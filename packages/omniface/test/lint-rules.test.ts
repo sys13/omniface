@@ -112,3 +112,56 @@ describe('override budget lint (4.5)', () => {
     expect(findings(app, 'override-budget')).toEqual([])
   })
 })
+
+describe('screen-shadows-rest lint', () => {
+  const Task = z.object({ id: z.string(), title: z.string() })
+  const tasks = {
+    list: f
+      .op({ description: 'Every task', input: z.object({}), output: z.object({ items: z.array(Task) }) })
+      .traits({ readonly: true })
+      .handle(() => ({ items: [] })),
+    get: f
+      .op({ description: 'One task', input: z.object({ id: z.string() }), output: Task })
+      .traits({ readonly: true })
+      .handle(({ input }) => ({ id: input.id, title: 't' })),
+    create: f
+      .op({ description: 'Make one', input: z.object({ title: z.string() }), output: Task })
+      .handle(({ input }) => ({ id: 'x', title: input.title })),
+  }
+  const withWeb = (web: Record<string, unknown>) => f.app({ name: 'shadow', ops: { tasks }, facets: { rest: true, web } as never })
+
+  it('names the op, the shared route and the facet that answers when the console sits at the root', () => {
+    const found = findings(withWeb({ path: '' }), 'screen-shadows-rest')
+    expect(found.map((x) => x.op)).toEqual(['tasks.list', 'tasks.get'])
+    expect(found[0]!.message).toContain('The tasks.list screen and REST tasks.list share GET /tasks,')
+    expect(found[0]!.message).toContain('the screen answers')
+    // A detail screen at /tasks/{id} and GET /tasks/{id} are one route, whatever the params are called.
+    expect(found[1]!.message).toContain('share GET /tasks/{id},')
+  })
+
+  it('is never an error: a console that owns browser traffic at the root is a legitimate setup', () => {
+    const found = findings(withWeb({ path: '' }), 'screen-shadows-rest')
+    expect(found.length).toBeGreaterThan(0)
+    expect(found.every((x) => x.level === 'warn')).toBe(true)
+  })
+
+  it('says nothing under the default mount path, where the two sets of routes are disjoint', () => {
+    expect(findings(withWeb({}), 'screen-shadows-rest')).toEqual([])
+  })
+
+  it('does not report a POST route against a screen that only answers GET', () => {
+    // POST /tasks is REST's create; the list screen at /tasks does not take a POST.
+    const found = findings(withWeb({ path: '' }), 'screen-shadows-rest')
+    expect(found.some((x) => x.message.includes('POST'))).toBe(false)
+  })
+
+  it('reports a POST route against a form screen, which takes the POST', () => {
+    const app = f.app({
+      name: 'shadow-form',
+      ops: { tasks },
+      facets: { rest: { ops: { 'tasks.create': { path: '/app/tasks/new' } } }, web: true },
+    })
+    const found = findings(app, 'screen-shadows-rest')
+    expect(found.map((x) => x.message)).toEqual([expect.stringContaining('The tasks.create screen and REST tasks.create share POST /app/tasks/new,')])
+  })
+})
