@@ -111,13 +111,17 @@ function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<
  * rejected: that is this adapter's own verdict, not someone else's token.
  */
 export function apiKeyAdapter(options: ApiKeyAdapterOptions): AuthAdapter {
-  const seed = seeder(options.store, options.keys)
+  return keyAdapter(options.store, seeder(options.store, options.keys), options.name)
+}
+
+/** The adapter over a seeder the caller owns, so `apiKeys()` and its adapter seed once between them. */
+function keyAdapter(store: ApiKeyStore, seed: () => Promise<void>, name = 'api-key'): AuthAdapter {
   return defineAuthAdapter({
-    name: options.name ?? 'api-key',
+    name,
     async authenticate(ctx) {
       if (!ctx.credential) return null
       await seed()
-      const row = await options.store.findByHash(hashKey(ctx.credential.token))
+      const row = await store.findByHash(hashKey(ctx.credential.token))
       if (!row) return null
       if (row.revokedAt) throw errors.unauthenticated('API key has been revoked')
       return {
@@ -141,7 +145,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
   const store = options.store ?? memoryKeyStore()
   const keyPrefix = options.prefix ?? 'fk_'
   const seed = seeder(store, options.keys)
-  const adapter = apiKeyAdapter({ store, ...(options.keys ? { keys: options.keys } : {}) })
+  const adapter = keyAdapter(store, seed)
 
   const ops = {
     auth: {
