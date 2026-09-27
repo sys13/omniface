@@ -12,7 +12,7 @@ Release, in full:
 3. Merging that PR publishes to npm with provenance and pushes a git tag per package.
 
 The four published packages version in lockstep (`fixed` in `config.json`), so a release moves
-`facet`, `@omniface/client`, `@omniface/cli` and `@omniface/testing` together and their cross-dependencies
+`omniface`, `@omniface/client`, `@omniface/cli` and `@omniface/testing` together and their cross-dependencies
 stay on the same number. `example-tasks` is private and ignored.
 
 See [docs/RELEASING.md](../docs/RELEASING.md).

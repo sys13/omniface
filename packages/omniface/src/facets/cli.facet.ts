@@ -114,6 +114,9 @@ export const cliFacet = defineFacet<CliConfig, CliProjection, CliSettings>({
 
   summary: () => 'a CLI',
 
+  // The path `omniface build` writes by default; the bin exists only once it has run.
+  devHint: (_settings, base) => `node .omniface/cli/bin.mjs --base-url ${base}  (after omniface build)`,
+
   contract({ app, op, others }, projection) {
     const problems: string[] = []
     const config = app.facets['cli'] as CliConfig | null

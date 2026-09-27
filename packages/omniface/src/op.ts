@@ -110,7 +110,7 @@ export function createOpFactory<Ctx>(): OpFactory<Ctx> {
         const all = [...emits, ...more]
         const names = all.map((e) => e.name)
         const duplicate = names.find((name, i) => names.indexOf(name) !== i)
-        if (duplicate) throw new Error(`facet: op declares the event "${duplicate}" twice`)
+        if (duplicate) throw new Error(`omniface: op declares the event "${duplicate}" twice`)
         return build(traits, all)
       },
       handle: (handler) => {

@@ -20,6 +20,8 @@ export type ApiKeyRecord = {
 /**
  * Where keys live. The built-in store is in memory; `fileKeyStore` and `sqlKeyStore` are the
  * durable ones, and anything else that satisfies this interface works the same way.
+ * `fileKeyStore` is for one process per file: two processes sharing it can lose each other's
+ * writes, revocations included. More than one process means `sqlKeyStore`.
  *
  * `@omniface/testing`'s `apiKeyStoreCases()` is the conformance suite every implementation should pass.
  */
@@ -65,6 +67,7 @@ export type SeedKey = { key: string; principalId: string; name?: string; kind?: 
 export type ApiKeysOptions = {
   /** Keys that exist at startup (e.g. from env). */
   keys?: SeedKey[]
+  /** Default: in memory. `fileKeyStore` is single-process; share keys across processes with `sqlKeyStore`. */
   store?: ApiKeyStore
   /** Prefix for generated keys, e.g. "acme_". */
   prefix?: string
@@ -111,13 +114,17 @@ function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<
  * rejected: that is this adapter's own verdict, not someone else's token.
  */
 export function apiKeyAdapter(options: ApiKeyAdapterOptions): AuthAdapter {
-  const seed = seeder(options.store, options.keys)
+  return keyAdapter(options.store, seeder(options.store, options.keys), options.name)
+}
+
+/** The adapter over a seeder the caller owns, so `apiKeys()` and its adapter seed once between them. */
+function keyAdapter(store: ApiKeyStore, seed: () => Promise<void>, name = 'api-key'): AuthAdapter {
   return defineAuthAdapter({
-    name: options.name ?? 'api-key',
+    name,
     async authenticate(ctx) {
       if (!ctx.credential) return null
       await seed()
-      const row = await options.store.findByHash(hashKey(ctx.credential.token))
+      const row = await store.findByHash(hashKey(ctx.credential.token))
       if (!row) return null
       if (row.revokedAt) throw errors.unauthenticated('API key has been revoked')
       return {
@@ -141,7 +148,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
   const store = options.store ?? memoryKeyStore()
   const keyPrefix = options.prefix ?? 'fk_'
   const seed = seeder(store, options.keys)
-  const adapter = apiKeyAdapter({ store, ...(options.keys ? { keys: options.keys } : {}) })
+  const adapter = keyAdapter(store, seed)
 
   const ops = {
     auth: {

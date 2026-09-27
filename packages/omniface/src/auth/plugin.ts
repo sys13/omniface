@@ -36,10 +36,10 @@ export type AuthOptions = {
  */
 export function auth(options: AuthOptions) {
   const adapters = [...options.adapters]
-  if (adapters.length === 0) throw new Error('facet: auth() needs at least one adapter')
+  if (adapters.length === 0) throw new Error('omniface: auth() needs at least one adapter')
   const seen = new Set<string>()
   for (const a of adapters) {
-    if (seen.has(a.name)) throw new Error(`facet: auth() has two adapters named "${a.name}"`)
+    if (seen.has(a.name)) throw new Error(`omniface: auth() has two adapters named "${a.name}"`)
     seen.add(a.name)
   }
   const onUnknown = options.onUnknownCredential ?? 'reject'

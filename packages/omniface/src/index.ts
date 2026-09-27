@@ -50,7 +50,7 @@ export { ERROR_CODES, FacetError, errors, toFacetError, type ErrorCode, type Fac
 export { paginate } from './pagination.ts'
 export { createServer, serve, type ServerOptions } from './server.ts'
 
-// --- Core: tooling behind the `facet` CLI ----------------------------------------------------
+// --- Core: tooling behind the `omniface` CLI ----------------------------------------------------
 export { build, type BuildOptions, type BuildResult } from './build.ts'
 export {
   diffManifests,

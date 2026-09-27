@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { createServer, facet, type SecurityConfig } from '../src/index.ts'
+import { createServer, definePlugin, facet, type SecurityConfig } from '../src/index.ts'
 import { createRestApp } from '../src/facets/rest.ts'
 
 /** The smallest app with one read and one write, so CORS and CSRF have something to guard. */
@@ -107,6 +107,34 @@ describe('CORS', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('https://team.acme.test')
     // Refused where it is configured, not on the request that would have leaked.
     expect(() => createRestApp(createApp({ cors: { origin: '*', credentials: true } }))).toThrow(/cannot be combined/)
+  })
+
+  it('adds Origin to a Vary set upstream instead of replacing it', async () => {
+    // A plugin that negotiates on language: its Vary must survive, and Origin must join it, or a
+    // response computed for one origin can be cached and served to another.
+    const negotiates = definePlugin({
+      name: 'lang',
+      adapters: { rest: { headers: () => ({ vary: 'Accept-Language' }) } },
+    })
+    const f = facet({ plugins: [negotiates] })
+    const app = f.app({
+      name: 'varied',
+      ops: {
+        things: {
+          list: f
+            .op({ output: z.object({ ok: z.boolean() }) })
+            .traits({ readonly: true, public: true })
+            .handle(() => ({ ok: true })),
+        },
+      },
+      facets: { rest: { security: { cors: { origin: 'https://app.acme.test' } } } },
+    })
+    const rest = createRestApp(app)
+    for (const origin of ['https://app.acme.test', 'https://evil.test']) {
+      const res = await rest.fetch(new Request('http://api.test/things', { headers: { origin } }))
+      expect(res.status).toBe(200)
+      expect(res.headers.get('vary')).toBe('Accept-Language, Origin')
+    }
   })
 })
 

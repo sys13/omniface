@@ -363,4 +363,25 @@ describe('apiKeys as one provider among several', () => {
     expect(await store.revoke('key_seed_0', 'user_key')).toBe(true)
     await expect(adapter.authenticate(ctx(KEY))).rejects.toThrow(/revoked/)
   })
+
+  it('seeds its store once, however many of its paths ask for the seed keys', async () => {
+    const inner = memoryKeyStore()
+    const inserted: string[] = []
+    const store = { ...inner, insert: (row: Parameters<typeof inner.insert>[0]) => (inserted.push(row.id), inner.insert(row)) }
+    const keys = apiKeys({
+      store,
+      keys: [
+        { key: KEY, principalId: 'user_key', scopes: ['*'] },
+        { key: `${KEY}_2`, principalId: 'user_key', scopes: ['*'] },
+      ],
+    })
+    const f = facet({ plugins: [keys, scopes()] })
+    const app = f.app({ name: 'seedtest', ops: {} })
+    const credential = { type: 'bearer' as const, token: KEY }
+    // The authenticate hook and `apiKeys.list` both need the seed keys present.
+    await app.invoke('apiKeys.list', {}, { facet: 'rest', credential })
+    await app.invoke('apiKeys.list', {}, { facet: 'rest', credential })
+    await keys.adapter.authenticate(ctx(KEY))
+    expect(inserted).toEqual(['key_seed_0', 'key_seed_1'])
+  })
 })

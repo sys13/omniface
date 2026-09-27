@@ -77,7 +77,7 @@ export const webFacet = defineFacet<WebConfig, ManifestScreen, WebSettings>({
     // back to the ambient session — the exact thing the setting exists to avoid.
     if (agent && agent !== true && agent.credential === 'attenuated' && !ops.has(MINT_OP)) {
       throw new Error(
-        `facet: facets.web.agent.credential 'attenuated' needs the agentTokens() plugin, which contributes "${MINT_OP}"`,
+        `omniface: facets.web.agent.credential 'attenuated' needs the agentTokens() plugin, which contributes "${MINT_OP}"`,
       )
     }
   },
@@ -193,6 +193,8 @@ export const webFacet = defineFacet<WebConfig, ManifestScreen, WebSettings>({
   },
 
   summary: (settings) => `a web console (${settings.path})`,
+
+  devHint: (settings, base, manifest) => `${base}${settings.path}  (${manifest.ops.filter((o) => webOf(o)).length} screen(s))`,
 
   contract({ app, op }, screen) {
     const problems: string[] = []

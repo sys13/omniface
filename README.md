@@ -85,7 +85,7 @@ export default f.app({
 ## Quickstart
 
 ```sh
-npm install facet zod @omniface/cli    # @omniface/cli is the engine a generated CLI runs on
+npm install omniface zod @omniface/cli    # @omniface/cli is the engine a generated CLI runs on
 ```
 
 Put the definition above in `app.ts`, then:
@@ -133,8 +133,9 @@ Example dev keys: `dev_admin_key` (all scopes) and `dev_reader_key` (`tasks:read
 
 ## What's built
 
-- **One definition, four facets.** REST (with OpenAPI 3.1 and `/.well-known/facet.json`), MCP (stdio and
-  Streamable HTTP), an inferred TypeScript client, and a CLI shipped as engine + manifest.
+- **One definition, every facet.** REST (with OpenAPI 3.1 and `/.well-known/facet.json`), MCP (stdio and
+  Streamable HTTP), an inferred TypeScript client, a CLI shipped as engine + manifest, a web facet that
+  renders ops as screens, and declared events — the last two described below.
 - **Conventions first.** `tasks.complete` becomes `POST /tasks/{id}/complete`, `tasks complete <id>`,
   `tasks_complete` and `client.tasks.complete()`. Typed overrides for REST, CLI and MCP; MCP tool groups.
 - **Traits.** Op traits set HTTP methods, MCP annotations, CLI confirmations, SDK retries and idempotency keys.

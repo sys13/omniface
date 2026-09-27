@@ -99,6 +99,8 @@ export type FacetServer = {
    *
    * A facet that does not set one mounts after every facet that does, which is what
    * `FacetModule.order` does with an unset `order`. Set one if a route of yours may collide.
+   * Two facets that set the same number mount in display order — a tiebreak nobody chose, so
+   * do not rely on it.
    *
    * Not `FacetModule.order`, which is display order and asks a different question.
    */
@@ -137,7 +139,7 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   references?(config: Config): { where: string; ids: string[] }[]
 
   /**
-   * Anything else the config must satisfy against the app's ops. Throw with a `facet:` message.
+   * Anything else the config must satisfy against the app's ops. Throw with an `omniface:` message.
    *
    * Every id this facet declared in `references` resolves by the time this runs — `app()` throws
    * on unknown ids first, so `ops.get(id)!` here is safe and a guard for the missing case is dead
@@ -175,6 +177,13 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   /** How `llms.txt` introduces the facet when it is on. `a CLI`, `an MCP server (/mcp)`. */
   summary?(settings: Settings): string
 
+  /**
+   * This facet's line in the `omniface dev` banner, where `base` is the URL the server answers on:
+   * what an author would open or run next, and how much of the app it reaches. A facet without
+   * one shows its `summary` there instead.
+   */
+  devHint?(settings: Settings, base: string, manifest: Manifest): string
+
   /** What the generated conformance suite checks about this projection, without calling anything. */
   contract?(ctx: ContractContext, projection: Projection | null): string[]
 
@@ -200,14 +209,27 @@ export function defineFacet<Config, Projection, Settings = never>(
   return module
 }
 
-export function registerFacet(module: FacetModule<any, any, any>): void {
+/**
+ * Adds a facet to the registry, and returns what takes it back out. A real facet ignores the
+ * return; a test fixture calls it in `afterAll`, so the fixture does not outlive its file when
+ * files share a module graph (vitest with isolation off).
+ *
+ * Only the call that added the module can remove it. Registering a module that is already there
+ * hands back a no-op, so re-registering `restFacet` is not a way to unregister it — there is no
+ * reset, and no way to take out a facet you did not put in.
+ */
+export function registerFacet(module: FacetModule<any, any, any>): () => void {
   if (!/^[a-z][a-z0-9-]*$/.test(module.name)) {
-    throw new Error(`facet: facet name "${module.name}" must be lowercase kebab-case`)
+    throw new Error(`omniface: facet name "${module.name}" must be lowercase kebab-case`)
   }
-  if (RESERVED.has(module.name)) throw new Error(`facet: "${module.name}" is a reserved manifest key`)
+  if (RESERVED.has(module.name)) throw new Error(`omniface: "${module.name}" is a reserved manifest key`)
   const existing = registry.get(module.name)
-  if (existing && existing !== module) throw new Error(`facet: facet "${module.name}" is registered twice`)
+  if (existing && existing !== module) throw new Error(`omniface: facet "${module.name}" is registered twice`)
+  if (existing) return () => {}
   registry.set(module.name, module)
+  return () => {
+    if (registry.get(module.name) === module) registry.delete(module.name)
+  }
 }
 
 /** Every registered facet, by `order` and then by registration. */
@@ -222,7 +244,7 @@ export function facetModule(name: string): FacetModule | undefined {
   return registry.get(name)
 }
 
-/** The facet names an app has turned on, in registration order. */
+/** The facet names an app has turned on, in display order (`order`, then registration). */
 export function enabledFacets(facets: NormalizedFacets): string[] {
   return facetModules()
     .map((m) => m.name)

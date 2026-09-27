@@ -117,7 +117,9 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
     if (!binding) throw new Error(`harness: ${id} has no CLI binding`)
     let stdout = ''
     let stderr = ''
-    const argv = [...binding.command, '--json', JSON.stringify(input), '--output', 'json', '--yes', '--base-url', BASE_URL]
+    // Both spellings of `--json`: the one that passes input, and the bare one that picks JSON output.
+    // stdout claims a terminal below, so the second is what keeps the output parseable.
+    const argv = [...binding.command, '--json', JSON.stringify(input), '--json', '--yes', '--base-url', BASE_URL]
     if (apiKey) argv.push('--api-key', apiKey)
     if (idempotencyKey) argv.push('--idempotency-key', idempotencyKey)
     const code = await runCli({
@@ -131,7 +133,7 @@ export function createHarness(app: App, options: HarnessOptions = {}) {
       // `configDir` and `env: {}` already say that; without this the keyring walks around both.
       credentials: fileStore(configDir),
       env: {},
-      io: { stdout: { write: (s) => void (stdout += s), isTTY: false }, stderr: { write: (s) => void (stderr += s) }, stdinIsTTY: false },
+      io: { stdout: { write: (s) => void (stdout += s), isTTY: true }, stderr: { write: (s) => void (stderr += s) }, stdinIsTTY: false },
     })
     if (code === 0) return { ok: true, value: JSON.parse(stdout) }
     const errorCode = Object.entries(EXIT_CODES).find(([k, v]) => v === code && k !== 'usage')?.[0] ?? `exit_${code}`

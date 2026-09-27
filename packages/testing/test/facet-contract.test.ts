@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   build,
@@ -35,7 +35,9 @@ import { join } from 'node:path'
 
 type ProbeProjection = { slug: string; shouted: string }
 
-registerFacet({
+// Taken back out after this file, so `probe` does not reach another suite that shares the module
+// graph — which is every suite in the worker once vitest's file isolation is off.
+const unregisterProbe = registerFacet({
   name: 'probe',
   defaultOn: false,
   normalize: (value) => (value === undefined || value === false ? null : value === true ? {} : (value as object)),
@@ -53,6 +55,7 @@ registerFacet({
   summary: () => 'a probe',
   contract: (_ctx, projection: ProbeProjection | null) => (projection ? [] : ['no probe binding']),
 })
+afterAll(unregisterProbe)
 
 const probeOf = (op: ManifestOp) => projectionOf<ProbeProjection>(op, 'probe')
 

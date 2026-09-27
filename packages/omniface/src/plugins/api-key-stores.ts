@@ -22,8 +22,14 @@ type FileShape = { version: 1; keys: ApiKeyRecord[] }
 
 /**
  * Keys in one JSON file, written atomically (temp file plus rename) and serialised so concurrent
- * writes cannot interleave. Only the SHA-256 of each key is ever stored, so the file is not a
- * secret — but it is still an identity ledger, and should not be world-readable.
+ * writes from this process cannot interleave. Only the SHA-256 of each key is ever stored, so the
+ * file is not a secret — but it is still an identity ledger, and should not be world-readable.
+ *
+ * **One process per file.** The serialisation is an in-process queue, not a file lock. Two
+ * processes sharing the file — a second worker, a restart that overlaps the old process,
+ * `omniface dev` beside a running server — can each read, edit and rename, and the last rename
+ * wins: a key created or revoked by the other is lost. A lost revocation leaves a key working. Use
+ * `sqlKeyStore` when more than one process serves the same keys.
  */
 export function fileKeyStore(options: FileKeyStoreOptions): ApiKeyStore {
   const { path } = options
@@ -120,7 +126,7 @@ export function apiKeyTableSql(table: string = DEFAULT_API_KEY_TABLE): string {
 
 function assertIdentifier(name: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error(`facet: "${name}" is not a plain SQL identifier; table names are interpolated, not parameterised`)
+    throw new Error(`omniface: "${name}" is not a plain SQL identifier; table names are interpolated, not parameterised`)
   }
 }
 

@@ -54,7 +54,7 @@ epic is not that it goes badly — it is that it succeeds and keeps going until 
 
 ## E1 — Release readiness
 
-**Goal:** `npm i facet` works, and a version number means something.
+**Goal:** `npm i omniface` works, and a version number means something.
 **Why:** packages are consumed as TypeScript source with no build step, so facet is
 currently usable only from inside this repo. Every other epic ships through this one.
 
@@ -99,8 +99,9 @@ exception that skips scoring entirely.
 Where each landed: the contract is `AuthAdapter` in the core (`facet`), the adapters and the
 `auth()` plugin are [`omniface/auth`](API.md#other-facet-entry-points), and the middleware is
 `securityMiddleware`, mounted by `createServer` and `createRestApp` unless `facets.rest.security`
-says otherwise. The durable key stores are `fileKeyStore` and `sqlKeyStore` in `omniface/plugins`,
-and `@omniface/testing`'s `apiKeyStoreCases()` is the suite every `ApiKeyStore` has to pass.
+says otherwise. The durable key stores are `fileKeyStore` and `sqlKeyStore` in `omniface/plugins`
+— the file store for one process per file, since it serialises writes in-process and takes no
+file lock — and `@omniface/testing`'s `apiKeyStoreCases()` is the suite every `ApiKeyStore` has to pass.
 
 Three things worth knowing about how they were built:
 

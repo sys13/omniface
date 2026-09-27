@@ -43,6 +43,12 @@ export const zapierFacet = defineFacet<ZapierConfig, ZapierProjection, ZapierSet
 registerFacet(zapierFacet)
 ```
 
+`registerFacet` returns a function that takes the facet back out. A facet you ship ignores it. A
+test fixture facet passes it to `afterAll`, so the fixture does not reach other suites that share
+its module graph, as every suite in a worker does when vitest's file isolation is off. Only the
+call that added the module can remove it: registering a module that is already there returns a
+no-op, so there is no way to take out a facet you did not put in.
+
 | Member | What it answers | Required |
 | --- | --- | --- |
 | `name` | The key in `facets` config, in the manifest and in a diff report | yes |
@@ -78,9 +84,13 @@ is meant to win.
 An unset `mountOrder` sorts after every facet that sets one, the same way an unset
 `FacetModule.order` sorts after every facet that asks. It read as `0` before, which put an
 out-of-tree facet whose author had not thought about mount order level with `mcp` and left the tie
-to registration order — and registration order depends on which import ran first, so the case with
-the least thought behind it had the least defined answer. Mounting last is not a good place either;
+to display order — `FacetModule.order`, a number set to answer a different question — so the case
+with the least thought behind it was decided by accident. Mounting last is not a good place either;
 it is a stated one. A facet with a route that may collide sets a number.
+
+Two facets that set the same `mountOrder` still tie, and the tie falls to display order: the
+registry hands `createServer` its facets sorted by `FacetModule.order`, and the sort is stable.
+That is a description, not a promise — two facets claiming the same number is a mistake either way.
 
 `create` is declared as returning `unknown`, and `createServer` casts the result to a Hono app
 before mounting it. In practice that means a served facet returns a Hono app today — that is what

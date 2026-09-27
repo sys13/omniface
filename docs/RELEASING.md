@@ -81,6 +81,6 @@ Each change is reported at the level a caller would feel it — `breaking`, `add
 tagged with the facets it lands on, and the report ends in one sentence: *"Breaks rest and cli, not
 mcp and sdk."* `--strict` makes a breaking change an exit code, `--quiet` hides the neutral ones,
 and `--json` is the same data for a bot. The suggested bump follows the rule above: breaking →
-`minor` pre-1.0. The diff reads manifests, not source, so it sees exactly what the four facets
-publish — a renamed output type is breaking for the SDK and OpenAPI and invisible to MCP; a newly
+`minor` pre-1.0. The diff reads manifests, not source, so it sees exactly what each facet
+publishes — a renamed output type is breaking for the SDK and OpenAPI and invisible to MCP; a newly
 `destructive` op breaks CLI scripts, which now stop at a prompt, and nothing else.

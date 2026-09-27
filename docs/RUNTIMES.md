@@ -23,7 +23,7 @@ it comfortably.
 
 **Loading a `.ts` entry is a separate question.** `omniface dev`, `omniface build`, `omniface lint`,
 `omniface inspect`, `omniface conformance` and `omniface mcp` all `import()` your entry module, so whether `app.ts` works depends
-on the runtime, not on facet: Node 22.18+ and 24 strip types natively, Bun compiles them. On Node
+on the runtime, not on omniface: Node 22.18+ and 24 strip types natively, Bun compiles them. On Node
 20, point the commands at compiled JavaScript (`omniface dev dist/app.js`) or run them under a loader
 (`node --import tsx node_modules/.bin/omniface dev app.ts`).
 

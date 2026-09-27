@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { buildManifest, defineFacet, errors, facet, inspectOp, registerFacet, toJSONSchema, type FacetsConfig, type OpIds } from '../src/index.ts'
+import { buildManifest, defineFacet, errors, facet, facetModule, inspectOp, registerFacet, toJSONSchema, type FacetsConfig, type OpIds } from '../src/index.ts'
 import { buildOpenApi } from '../src/facets/openapi.ts'
 import { redact, stripInternal } from '../src/jsonschema.ts'
 import { scopes } from '../src/plugins/index.ts'
@@ -274,4 +274,36 @@ const unguarded = defineFacet<{ ops: string[] }, null>({
   },
   project: () => null,
 })
-registerFacet(unguarded)
+afterAll(registerFacet(unguarded))
+
+// A test fixture facet has to be able to leave, or it reaches every suite that shares its module
+// graph — which, with vitest's file isolation off, is every suite in the worker.
+describe('registerFacet', () => {
+  const fixture = () => defineFacet<true, null>({ name: 'transient', defaultOn: false, normalize: () => null, project: () => null })
+
+  it('returns what takes the facet back out', () => {
+    const module = fixture()
+    const unregister = registerFacet(module)
+    expect(facetModule('transient')).toBe(module)
+    unregister()
+    expect(facetModule('transient')).toBeUndefined()
+  })
+
+  it('does not let a second registration of the same module take it out', () => {
+    // Otherwise `registerFacet(restFacet)()` would be a reset in all but name.
+    const rest = facetModule('rest')!
+    registerFacet(rest)()
+    expect(facetModule('rest')).toBe(rest)
+  })
+
+  it('leaves a later registration under the same name alone', () => {
+    const first = fixture()
+    const second = fixture()
+    const unregisterFirst = registerFacet(first)
+    unregisterFirst()
+    const unregisterSecond = registerFacet(second)
+    unregisterFirst()
+    expect(facetModule('transient')).toBe(second)
+    unregisterSecond()
+  })
+})

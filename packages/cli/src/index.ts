@@ -121,6 +121,9 @@ function parseArgv(argv: string[], isBoolean: (flag: string) => boolean): Parsed
       const eq = token.indexOf('=')
       const name = eq === -1 ? token.slice(2) : token.slice(2, eq)
       if (eq !== -1) add(name, token.slice(eq + 1))
+      // `--json` passes input, which is always an object, so it takes the next token only when that
+      // is one. Bare, it means `--output json`, as it does on every `omniface` command.
+      else if (name === 'json' && !argv[i + 1]?.trimStart().startsWith('{')) add('output', 'json')
       else if (name.startsWith('no-') && isBoolean(name.slice(3))) negated.add(name.slice(3))
       else if (isBoolean(name)) add(name, 'true')
       else if (i + 1 < argv.length && !argv[i + 1]!.startsWith('--')) add(name, argv[++i]!)
@@ -201,7 +204,7 @@ function rootHelp(manifest: Manifest, bin: string, prefix: string[] = [], plugin
     '',
     'Global flags:',
     '  --output, -o <table|json>  Output format (default: table in a terminal, json when piped)',
-    '  --json <input>             Full input as JSON',
+    "  --json '{…}'               Full input as JSON; bare --json is --output json",
     '  --api-key <key>            API key (or ' + envPrefix(bin) + '_API_KEY, or `' + bin + ' login`)',
     '  --base-url <url>           Server URL (or ' + envPrefix(bin) + '_BASE_URL)',
     '  --yes, -y                  Skip confirmation for destructive commands',

@@ -80,6 +80,23 @@ describe('generated CLI', () => {
     expect(JSON.parse(forced.stdout)).toMatchObject({ title: 'First' })
   })
 
+  it('takes --json as input when given an object, and as --output json when bare', async () => {
+    const created = await cli.run(['tasks', 'create', '--json', '{"title":"From JSON"}'], { tty: true })
+    expect(created.code).toBe(0)
+    expect(created.stdout).toMatch(/^title\s+From JSON$/m)
+    // Bare, before a positional and at the end: neither swallows the next token or asks for one.
+    const bare = await cli.run(['tasks', 'get', '--json', 'task_1'], { tty: true })
+    expect(JSON.parse(bare.stdout)).toMatchObject({ title: 'From JSON' })
+    const both = await cli.run(['tasks', 'create', '--json', '{"title":"Both"}', '--json'], { tty: true })
+    expect(JSON.parse(both.stdout)).toMatchObject({ title: 'Both' })
+    // Whichever of the two output flags comes last wins.
+    expect((await cli.run(['tasks', 'get', 'task_1', '--json', '-o', 'table'], { tty: true })).stdout).toMatch(/^title\s+From JSON$/m)
+    // `--json=` is always input, so a value that is not an object is still an error.
+    const wrong = await cli.run(['tasks', 'create', '--json=nope'])
+    expect(wrong.code).toBe(2)
+    expect(wrong.stderr).toContain('--json expects a JSON object')
+  })
+
   it('pages with --all and hints at the next cursor otherwise', async () => {
     for (let i = 1; i <= 5; i++) await cli.run(['tasks', 'create', `T${i}`])
     const page = await cli.run(['tasks', 'list', '--limit', '2'], { tty: true })

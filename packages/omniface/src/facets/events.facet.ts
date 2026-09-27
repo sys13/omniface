@@ -83,7 +83,7 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     for (const id of Object.keys(config.ops ?? {})) {
       // `references` declared these ids and `app()` has already thrown on any that do not resolve.
       if (!ops.get(id)!.op.emits.length) {
-        throw new Error(`facet: facets.events.ops names "${id}", which declares no events`)
+        throw new Error(`omniface: facets.events.ops names "${id}", which declares no events`)
       }
     }
   },
@@ -113,11 +113,10 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     return { events: [...catalog.values()].sort((a, b) => a.name.localeCompare(b.name)) }
   },
 
-  // A renamed `t.named()` type is breaking here for the same reason it is on the SDK: the catalog
-  // advertises the payload under that name, and a consumer generating types from it sees the
-  // change. It sees it further away than an SDK caller does — another process, often another
-  // language, recompiling against nothing.
-  observes: { typeNames: true },
+  // No `observes.typeNames`. A renamed payload type is breaking here — the catalog advertises the
+  // payload under that name — but the payload is not the op's input or output, which is all the
+  // generic `type-renamed` rule compares. `event-payload-type-renamed` below compares the payload
+  // itself, so it fires on every rename a consumer can see and on none it cannot.
 
   diff(before, after, { op }): FacetChange[] {
     const changes: FacetChange[] = []
@@ -167,6 +166,43 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
           level: 'additive',
           rule: 'event-payload-field-added',
           message: `${op}: "${name}" now carries ${added.join(', ')}.`,
+        })
+      }
+    }
+    return changes
+  },
+
+  // The catalog's own question: which ops stand behind each name. `diff` above sees one op at a
+  // time and cannot tell "tasks.import stopped emitting task.created" from "nothing emits it now".
+  diffSettings(before, after): FacetChange[] {
+    const changes: FacetChange[] = []
+    const now = new Map(after.events.map((e) => [e.name, e]))
+    for (const was of before.events) {
+      const is = now.get(was.name)
+      if (!is) {
+        changes.push({
+          level: 'breaking',
+          rule: 'event-left-catalog',
+          message: `No op advertises "${was.name}" any more; it was emitted by ${was.ops.join(', ')}.`,
+          detail: 'A consumer subscribed to the name finds nothing in the catalog to subscribe to.',
+        })
+        continue
+      }
+      const gone = was.ops.filter((id) => !is.ops.includes(id))
+      if (gone.length) {
+        changes.push({
+          level: 'breaking',
+          rule: 'event-emitter-removed',
+          message: `"${was.name}" is no longer emitted by ${gone.join(', ')}; ${is.ops.join(', ')} still emit${is.ops.length === 1 ? 's' : ''} it.`,
+          detail: 'Every event carries the op that emitted it, so a consumer filtering on that op stops receiving anything.',
+        })
+      }
+      const joined = is.ops.filter((id) => !was.ops.includes(id))
+      if (joined.length) {
+        changes.push({
+          level: 'additive',
+          rule: 'event-emitter-added',
+          message: `"${was.name}" is now emitted by ${joined.join(', ')} as well.`,
         })
       }
     }

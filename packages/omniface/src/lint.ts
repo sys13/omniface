@@ -1,6 +1,9 @@
 import type { App, NormalizedFacets } from './app.ts'
 import { objectProperties, type JSONSchema } from './jsonschema.ts'
+import { facetModule } from './facet.ts'
 import { mcpOf, mcpTools } from './facets/mcp.facet.ts'
+import { restOf } from './facets/rest.facet.ts'
+import { webOf, webSettings } from './facets/web.facet.ts'
 import { buildManifest, type Manifest } from './manifest.ts'
 import { takeUnreachedTraitSchemas } from './traits.ts'
 
@@ -193,6 +196,40 @@ export function lint(app: App, manifest: Manifest = buildManifest(app), options:
           `${overridden.length} of ${projected} ${facet} ops carry a per-op override (${overridden.join(', ')}). ` +
           `Overrides are the ladder's step 3, for the cases convention and traits cannot reach. ${ADVICE[facet]}`,
       })
+    }
+  }
+
+  // A screen and a REST route on the same method and path. Mounting settles it — the facet with the
+  // lower `serve.mountOrder` answers — and that can be exactly what the app wants: a console at the
+  // root, taking browser traffic from the API. So this says what happens and asks for nothing, and
+  // it is a warning rather than an error because an error would refuse a legitimate configuration.
+  const web = webSettings(manifest)
+  if (web && manifest.facets['rest']) {
+    const shape = (path: string) => path.replace(/\{[^}]+\}/g, '{}')
+    const routes = new Map<string, string>()
+    for (const op of manifest.ops) {
+      const rest = restOf(op)
+      if (rest) routes.set(`${rest.method} ${shape(rest.path)}`, op.id)
+    }
+    const order = (name: string) => facetModule(name)?.serve?.mountOrder ?? Number.MAX_SAFE_INTEGER
+    const winner = order('web') < order('rest') ? 'the screen answers' : 'REST answers'
+    for (const op of manifest.ops) {
+      const screen = webOf(op)
+      if (!screen) continue
+      const route = `${web.path}${screen.path === '/' ? '' : screen.path}` || '/'
+      // A form screen takes POST as well as GET; a table or a detail only GET.
+      for (const method of screen.kind === 'form' ? ['GET', 'POST'] : ['GET']) {
+        const rest = routes.get(`${method} ${shape(route)}`)
+        if (!rest) continue
+        findings.push({
+          level: 'warn',
+          rule: 'screen-shadows-rest',
+          message:
+            `The ${op.id} screen and REST ${rest} share ${method} ${route}, and ${winner}. ` +
+            `Fine if the console is meant to own that route; otherwise move the screens with facets.web.path.`,
+          op: op.id,
+        })
+      }
     }
   }
 

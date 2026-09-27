@@ -70,7 +70,7 @@ export function defineEvent<S extends AnySchema>(config: {
   description?: string
 }): EventDefinition<S> {
   if (!NAME.test(config.name)) {
-    throw new Error(`facet: event name "${config.name}" must be lowercase, dotted: "task.created"`)
+    throw new Error(`omniface: event name "${config.name}" must be lowercase, dotted: "task.created"`)
   }
   return Object.freeze({
     kind: 'omniface.event',

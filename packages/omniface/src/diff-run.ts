@@ -20,7 +20,7 @@ function assertManifest(value: unknown, from: string): Manifest {
   }
   if (typeof m.facet !== 'number') throw new Error(`${from} has no manifest version; it was not written by \`omniface build\`.`)
   if (m.facet > MANIFEST_VERSION) {
-    throw new Error(`${from} is manifest v${m.facet}; this facet reads v${MANIFEST_VERSION}. Upgrade omniface to diff against it.`)
+    throw new Error(`${from} is manifest v${m.facet}; this omniface reads v${MANIFEST_VERSION}. Upgrade omniface to diff against it.`)
   }
   return m as Manifest
 }

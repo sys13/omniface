@@ -22,7 +22,9 @@ import { serve } from './server.ts'
 const USAGE = `omniface — one definition, every interface
 
 Usage:
-  omniface dev <entry> [--port 3000]     Serve REST, MCP (/mcp) and the inspector (/_omniface)
+  omniface dev <entry> [--port 3000] [--host 127.0.0.1]
+                                         Serve REST, MCP (/mcp) and the inspector (/_omniface);
+                                         --host 0.0.0.0 to be reachable from other machines
   omniface mcp <entry>                   Serve MCP over stdio (key from <APP>_API_KEY)
   omniface inspect <entry> [op] [--json] Show an op on every facet
   omniface build <entry> [--out .omniface]  Write manifest, OpenAPI, llms.txt, the SDK and CLI packages
@@ -33,7 +35,44 @@ Usage:
 
 <entry> is a module whose default export is a facet app.
 <before>/<after> are either such a module or a manifest.json from \`omniface build\`.
+\`omniface <command> --help\` lists every flag a command takes.
 `
+
+/**
+ * What `omniface <command> --help` adds to that command's usage line: every flag its `case` reads,
+ * including the ones the one-line usage above has no room for.
+ */
+const FLAGS: Record<string, [flag: string, description: string][]> = {
+  dev: [
+    ['--port <n>', 'Port to listen on (default: $PORT, then 3000)'],
+    ['--host <addr>', 'Address to bind (default: 127.0.0.1; 0.0.0.0 to be reachable from other machines)'],
+  ],
+  mcp: [],
+  inspect: [['--json', 'Print JSON instead of text']],
+  build: [['--out <dir>', 'Where to write (default: .omniface)']],
+  lint: [
+    ['--fix', 'Wrap unnamed types in t.named(), then lint again to check the edit'],
+    ['--json', 'Print the findings as JSON'],
+  ],
+  conformance: [
+    ['--fixtures <file>', 'Fixtures module (default: conformance.fixtures.ts beside <entry>)'],
+    ['--op <id>', 'Run only this op; repeatable'],
+    ['--strict', 'Also fail when an op has no fixture input to generate its cases from'],
+    ['--json', 'Print the result as JSON'],
+  ],
+  diff: [
+    ['--strict', 'Exit 1 when a change is breaking'],
+    ['--quiet', 'Hide neutral changes'],
+    ['--json', 'Print the diff as JSON'],
+  ],
+}
+
+function commandHelp(command: string): string {
+  const lines = USAGE.split('\n').filter((l) => l.startsWith(`  omniface ${command} `))
+  const flags = FLAGS[command]!
+  const width = Math.max(...flags.map(([f]) => f.length), 10) + 2
+  return ['Usage:', ...lines, ...(flags.length ? ['', 'Flags:', ...flags.map(([f, d]) => `  ${f.padEnd(width)}${d}`)] : [])].join('\n') + '\n'
+}
 
 const { version: VERSION } = createRequire(import.meta.url)('../package.json') as { version: string }
 
@@ -70,6 +109,11 @@ async function relint(entry: string): Promise<LintFinding[]> {
 
 async function main(argv: string[]): Promise<number> {
   const [command, entry, ...rest] = argv
+  // Before the dispatch, which would otherwise load `--help` as the <entry>.
+  if (command && Object.hasOwn(FLAGS, command) && argv.slice(1).some((a) => a === '--help' || a === '-h')) {
+    process.stdout.write(commandHelp(command))
+    return 0
+  }
   switch (command) {
     case '--version':
     case '-v':
@@ -80,8 +124,20 @@ async function main(argv: string[]): Promise<number> {
     case 'dev': {
       const app = await loadApp(entry)
       const port = Number(flag(rest, 'port') ?? process.env.PORT ?? 3000)
-      serve(app, { port, inspector: true })
-      const base = `http://localhost:${port}`
+      // Loopback unless asked: CORS, CSRF and the security headers ship closed, and so does this.
+      const host = flag(rest, 'host') ?? '127.0.0.1'
+      const server = serve(app, { port, host, inspector: true })
+      // `serve` returns before the socket is bound. The banner waits for it, so a client that reads
+      // the banner can connect at once, and a failed bind is one line and exit 1 rather than a
+      // banner for a server that never existed.
+      await new Promise<void>((listening, failed) => {
+        const onError = (err: NodeJS.ErrnoException) =>
+          failed(new Error(err.code === 'EADDRINUSE' ? `port ${port} is already in use on ${host}` : `cannot listen on ${host}:${port}: ${err.message}`))
+        server.once('error', onError)
+        server.once('listening', () => (server.off('error', onError), listening()))
+      })
+      const shown = ['127.0.0.1', '0.0.0.0', '::'].includes(host) ? 'localhost' : host.includes(':') ? `[${host}]` : host
+      const base = `http://${shown}:${port}`
       const m = buildManifest(app)
       process.stderr.write(
         [
@@ -90,7 +146,11 @@ async function main(argv: string[]): Promise<number> {
           // knows which facets exist, so a facet added as a module shows up in the banner too.
           ...facetModules()
             .filter((mod) => m.facets[mod.name] != null)
-            .map((mod) => `  ${mod.name.padEnd(10)} ${mod.summary?.(m.facets[mod.name]) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`}`),
+            .map((mod) => {
+              const settings = m.facets[mod.name]
+              const line = mod.devHint?.(settings, base, m) ?? mod.summary?.(settings) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`
+              return `  ${mod.name.padEnd(10)} ${line}`
+            }),
           `  ${'inspector'.padEnd(10)} ${base}/_omniface`,
           '',
         ]
@@ -222,7 +282,7 @@ async function main(argv: string[]): Promise<number> {
         for (const f of result.fixed) process.stdout.write(`fixed [${f.rule}] ${f.target} → t.named('${f.name}', …)  ${f.file}\n`)
         for (const u of result.unfixable) process.stdout.write(`kept  [${u.finding.rule}] ${u.reason}\n`)
         if (result.rolledBack) {
-          process.stderr.write(`\nfacet lint --fix changed nothing: ${result.rolledBack}\n`)
+          process.stderr.write(`\nomniface lint --fix changed nothing: ${result.rolledBack}\n`)
           return 1
         }
         if (result.fixed.length) {

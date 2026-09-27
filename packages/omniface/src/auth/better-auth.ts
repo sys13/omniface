@@ -82,7 +82,7 @@ function forwardHeaders(ctx: AuthContext): Headers | undefined {
 
 export function betterAuthAdapter(options: BetterAuthAdapterOptions): AuthAdapter {
   if (!options.auth && !options.baseUrl) {
-    throw new Error('facet: betterAuthAdapter() needs either `auth` (a Better Auth instance) or `baseUrl`')
+    throw new Error('omniface: betterAuthAdapter() needs either `auth` (a Better Auth instance) or `baseUrl`')
   }
   const fetchFn = options.fetch ?? globalThis.fetch
   const basePath = options.basePath ?? '/api/auth'
