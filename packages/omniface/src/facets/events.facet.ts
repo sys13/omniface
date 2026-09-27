@@ -172,6 +172,43 @@ export const eventsFacet = defineFacet<EventsConfig, EventsProjection, EventsSet
     return changes
   },
 
+  // The catalog's own question: which ops stand behind each name. `diff` above sees one op at a
+  // time and cannot tell "tasks.import stopped emitting task.created" from "nothing emits it now".
+  diffSettings(before, after): FacetChange[] {
+    const changes: FacetChange[] = []
+    const now = new Map(after.events.map((e) => [e.name, e]))
+    for (const was of before.events) {
+      const is = now.get(was.name)
+      if (!is) {
+        changes.push({
+          level: 'breaking',
+          rule: 'event-left-catalog',
+          message: `No op advertises "${was.name}" any more; it was emitted by ${was.ops.join(', ')}.`,
+          detail: 'A consumer subscribed to the name finds nothing in the catalog to subscribe to.',
+        })
+        continue
+      }
+      const gone = was.ops.filter((id) => !is.ops.includes(id))
+      if (gone.length) {
+        changes.push({
+          level: 'breaking',
+          rule: 'event-emitter-removed',
+          message: `"${was.name}" is no longer emitted by ${gone.join(', ')}; ${is.ops.join(', ')} still emit${is.ops.length === 1 ? 's' : ''} it.`,
+          detail: 'Every event carries the op that emitted it, so a consumer filtering on that op stops receiving anything.',
+        })
+      }
+      const joined = is.ops.filter((id) => !was.ops.includes(id))
+      if (joined.length) {
+        changes.push({
+          level: 'additive',
+          rule: 'event-emitter-added',
+          message: `"${was.name}" is now emitted by ${joined.join(', ')} as well.`,
+        })
+      }
+    }
+    return changes
+  },
+
   present({ op }, projection) {
     const names = projection.events.map((event) => event.name)
     const snippet = `app.subscribe((event) => {\n  if (event.event === '${projection.events[0].name}') console.log(event.payload)\n})`

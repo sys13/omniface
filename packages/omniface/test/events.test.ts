@@ -374,6 +374,58 @@ describe('what a change to an event costs a consumer', () => {
     })
   })
 
+  describe('the catalog: which ops stand behind a name', () => {
+    const Created = defineEvent({ name: 'task.created', payload: Task })
+    const withEmitters = (emitters: string[], config?: unknown) =>
+      buildManifest(
+        facet().app({
+          name: 'acme',
+          ops: Object.fromEntries(
+            ['create', 'import'].map((id) => {
+              const op = f.op({ output: Task })
+              return [id, (emitters.includes(id) ? op.emits(Created) : op).handle(() => null as any)]
+            }),
+          ),
+          ...(config ? { facets: { events: config } } : {}),
+        }) as unknown as App<any>,
+      )
+
+    it('calls one of two emitters dropping an event breaking, naming the one that still emits it', () => {
+      const changes = diffManifests(withEmitters(['create', 'import']), withEmitters(['create'])).changes
+      expect(changes.find((c) => c.rule === 'event-emitter-removed')).toMatchObject({
+        level: 'breaking',
+        facets: ['events'],
+        message: '"task.created" is no longer emitted by import; create still emits it.',
+      })
+      expect(changes.some((c) => c.rule === 'event-left-catalog')).toBe(false)
+    })
+
+    it('calls a second emitter joining a name additive', () => {
+      const changes = diffManifests(withEmitters(['create']), withEmitters(['create', 'import'])).changes
+      expect(changes.find((c) => c.rule === 'event-emitter-added')).toMatchObject({
+        level: 'additive',
+        facets: ['events'],
+        message: '"task.created" is now emitted by import as well.',
+      })
+    })
+
+    it('calls the last emitter going breaking for the name, whatever took it away', () => {
+      const dropped = diffManifests(withEmitters(['create']), withEmitters([])).changes
+      expect(dropped.find((c) => c.rule === 'event-left-catalog')).toMatchObject({ level: 'breaking', facets: ['events'] })
+      // An opt-out keeps the declaration and the in-process sink, and still takes the name out of
+      // what the app advertises. The catalog is what a consumer reads, so it is the same change.
+      const optedOut = diffManifests(withEmitters(['create']), withEmitters(['create'], { ops: { create: false } })).changes
+      expect(optedOut.find((c) => c.rule === 'event-left-catalog')!.message).toBe(
+        'No op advertises "task.created" any more; it was emitted by create.',
+      )
+    })
+
+    it('says nothing when the catalog did not move', () => {
+      const changes = diffManifests(withEmitters(['create', 'import']), withEmitters(['create', 'import'])).changes
+      expect(changes).toEqual([])
+    })
+  })
+
   it('calls an op that stops emitting altogether no longer exposed on the facet', () => {
     const none = buildManifest(
       facet().app({ name: 'acme', ops: { create: f.op({ output: Task }).handle(() => null as any) } }) as unknown as App<any>,
