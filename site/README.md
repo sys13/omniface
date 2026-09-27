@@ -62,7 +62,7 @@ switch*. Cut the second and it reads like every other codegen tool.
 
 ## Design
 
-One definition is white light; the four facets are the spectrum it refracts
+One definition is white light; its facets are the spectrum it refracts
 into. So the brand accent is ink, and colour is spent only where it names a
 facet — REST amber, SDK violet, CLI teal, MCP rose — and nowhere else. The
 four-stop gradient in each section eyebrow is that idea in miniature.

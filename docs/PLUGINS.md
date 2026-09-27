@@ -98,7 +98,7 @@ definePlugin({
 
 ### The one rule: an adapter may not decide whether an operation runs
 
-That decision is Gate 1, and it belongs to the pipeline, where it applies to all four facets at
+That decision is Gate 1, and it belongs to the pipeline, where it applies to every facet at
 once and the conformance suite can see it. Nothing in `adapters` receives an `Invocation`, and
 nothing in it can abort, skip, replace or re-order one. What an adapter may do is:
 

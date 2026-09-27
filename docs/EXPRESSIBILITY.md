@@ -29,7 +29,7 @@ once per operation.
 
 The control subject is the result worth stating first: a Linear-style tracker is 15 ops with zero
 overrides on any facet and zero lint findings, and its generated conformance suite —
-**71/71 cases, four facets, no hand-tuning** — passes on an app written against the public API
+**71/71 cases across the four facets it turns on (REST, SDK, CLI, MCP), no hand-tuning** — passes on an app written against the public API
 with nothing adjusted in facet to accommodate it. The pitch holds on the shape it was designed for.
 
 ## What the study found in facet itself
@@ -72,7 +72,7 @@ exist. The message now names both possibilities and says what to do in the gener
 
 An S3 key is `photos/2026/cat.jpg`. With `path: '/{bucket}/{key}'`, `GET /b/photos/2026/cat.jpg`
 is a 404 and `GET /b/photos%2F2026%2Fcat.jpg` is a 200. facet's own SDK, CLI and MCP clients all
-percent-encode, so **the four facets do agree** — `examples/expressibility/probe-agreement.mjs`
+percent-encode, so **REST, SDK, CLI and MCP do agree** — `examples/expressibility/probe-agreement.mjs`
 checks exactly that, and they do. What is lost is compatibility with the wire format an existing
 S3 client or a hand-written `curl` already speaks. A wildcard segment is not expressible in
 `RestOverride` (`{ method, path, status }`).
@@ -121,14 +121,14 @@ field is the body, sent raw".
 The escape hatch that *does* work is worth noting, because it is the idiom to recommend if facet
 never grows binary payloads: **presigned URLs**. A presign op is a JSON value describing a byte
 transfer without performing one, so the bytes leave facet's world and the operation stays an
-ordinary op on all four facets.
+ordinary op on every facet.
 
 ### Medium — a rough edge with a workaround
 
 **F13/F14. Generating ops works; the type layer and the tool budget only half-follow.** (kubernetes)
 This was the study's most uncertain question and it came out well: `f.app({ ops })` takes a plain
 object, so a loop over a resource table produces 15 fully-projected ops, and adding a CRD adds five
-operations across four facets with no new code. Two things do not follow:
+operations across every facet the app turns on, with no new code. Two things do not follow:
 
 - Handler input inference dies on a generic schema parameter. With
   `resourceOps<Spec extends z.ZodType>(kind, spec: Spec)`, tsc reports `Property 'spec' does not
@@ -213,7 +213,7 @@ subject that struggled has in common.
 cd examples/expressibility
 node run-study.mjs                          # the table above
 node check-sdks.mjs                         # every generated SDK typechecks
-node probe-agreement.mjs                    # the four facets agree on a key containing '/'
+node probe-agreement.mjs                    # REST, SDK, CLI and MCP agree on a key containing '/'
 pnpm exec omniface conformance src/linear.ts   # 71/71 on the control subject
-pnpm exec omniface inspect src/github.ts repos.issues.get   # one op, four facets
+pnpm exec omniface inspect src/github.ts repos.issues.get   # one op, on each facet the app turns on
 ```

@@ -1,6 +1,6 @@
 # SDKs
 
-One definition projects onto four facets. Two of them are client libraries, and they are built
+One definition projects onto every facet an app turns on. Two of them are client libraries, and they are built
 very differently, because the people who use them have very different things in hand.
 
 | | Who it is for | How it is built | Where it lives |
@@ -98,7 +98,7 @@ On each operation:
 
 | Key | What it says |
 | --- | --- |
-| `x-omniface-op` | The op id (`tasks.create`). The stable identity across all four facets |
+| `x-omniface-op` | The op id (`tasks.create`). The stable identity across every facet |
 | `x-omniface-traits` | The op's declared traits, verbatim: `readonly`, `destructive`, `idempotent`, `paginated`, `scope`, `public`, `cost`, and any a plugin added |
 | `x-omniface-errors` | The error codes this op declares it can throw |
 | `x-omniface-sdk` | `{ method }` — the method path facet's own SDK uses (`["tasks","create"]`) |
@@ -144,7 +144,7 @@ The facet-specific advice is the same for all of them, and it is what the table 
 - **Carry `x-omniface-pii` into the generated documentation.** A trait that stops at the server is
   not a trait, it is a comment.
 
-What is *not* built yet is proof. `omniface conformance` drives the app's own four facets in
+What is *not* built yet is proof. `omniface conformance` drives the app's own facets in
 process; it has no way to reach a Python package. Backlog 5.4 is exactly that gap — a generated
 SDK in a second language, run against the same error and pagination checks the TypeScript client
 passes — and until it exists, the agreement between an outside generator's output and facet's own
