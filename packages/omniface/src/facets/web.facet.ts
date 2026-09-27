@@ -194,6 +194,8 @@ export const webFacet = defineFacet<WebConfig, ManifestScreen, WebSettings>({
 
   summary: (settings) => `a web console (${settings.path})`,
 
+  devHint: (settings, base, manifest) => `${base}${settings.path}  (${manifest.ops.filter((o) => webOf(o)).length} screen(s))`,
+
   contract({ app, op }, screen) {
     const problems: string[] = []
     const config = app.facets['web'] as WebConfig | null

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 
@@ -45,12 +45,17 @@ describe('omniface usage block', () => {
   })
 })
 
-/** The flags a command's `case` reads, whether through `flag(rest, 'x')` or a literal `'--x'`. */
-function flagsRead(command: string): string[] {
+/** The source of one command's `case` in the dispatch, up to the next `case` or `default`. */
+function caseBody(command: string): string {
   const source = readFileSync(join(PKG, 'src', 'devcli.ts'), 'utf8')
   const start = source.indexOf(`case '${command}':`)
   const end = source.slice(start + 1).search(/\n {4}(case |default:)/)
-  const body = source.slice(start, end === -1 ? undefined : start + 1 + end)
+  return source.slice(start, end === -1 ? undefined : start + 1 + end)
+}
+
+/** The flags a command's `case` reads, whether through `flag(rest, 'x')` or a literal `'--x'`. */
+function flagsRead(command: string): string[] {
+  const body = caseBody(command)
   const names = [...body.matchAll(/flag\(rest, '([a-z-]+)'\)|'--([a-z-]+)'/g)].map((m) => `--${m[1] ?? m[2]}`)
   return [...new Set(names)]
 }
@@ -69,5 +74,21 @@ describe('omniface <command> --help', () => {
   it('answers -h after an entry too, without loading it', () => {
     const help = execFileSync(process.execPath, [BIN, 'lint', 'does-not-exist.ts', '-h'], { encoding: 'utf8' })
     expect(help).toContain('--fix')
+  })
+})
+
+describe('omniface dev banner', () => {
+  // Each facet writes its own banner line (`devHint`, else `summary`). Naming a facet in the `dev`
+  // case would make the banner one more file to edit per facet, which the facet contract removed.
+  it('names no facet in the dev case', () => {
+    const dir = join(PKG, 'src', 'facets')
+    const facets = readdirSync(dir)
+      .filter((f) => f.endsWith('.facet.ts'))
+      .map((f) => /^\s*name: '([^']+)'/m.exec(readFileSync(join(dir, f), 'utf8'))?.[1])
+      .filter((n): n is string => n !== undefined)
+    // A parse that finds nothing would make the check below vacuous.
+    expect(facets.length).toBeGreaterThan(3)
+    const body = caseBody('dev')
+    expect(facets.filter((n) => new RegExp(`['"\`]${n}['"\`]|\\.${n}\\b`).test(body))).toEqual([])
   })
 })

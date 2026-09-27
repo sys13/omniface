@@ -174,6 +174,8 @@ export const mcpFacet = defineFacet<McpConfig, McpProjection, McpSettings>({
 
   summary: () => 'an MCP server (/mcp)',
 
+  devHint: (settings, base) => `${base}/mcp  (${settings.tools.length} tool(s))`,
+
   contract({ app, manifest, op, others }, projection) {
     const problems: string[] = []
     const config = app.facets['mcp'] as McpConfig | null

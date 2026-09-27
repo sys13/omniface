@@ -146,7 +146,11 @@ async function main(argv: string[]): Promise<number> {
           // knows which facets exist, so a facet added as a module shows up in the banner too.
           ...facetModules()
             .filter((mod) => m.facets[mod.name] != null)
-            .map((mod) => `  ${mod.name.padEnd(10)} ${mod.summary?.(m.facets[mod.name]) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`}`),
+            .map((mod) => {
+              const settings = m.facets[mod.name]
+              const line = mod.devHint?.(settings, base, m) ?? mod.summary?.(settings) ?? `${m.ops.filter((o) => o.facets[mod.name] != null).length} op(s)`
+              return `  ${mod.name.padEnd(10)} ${line}`
+            }),
           `  ${'inspector'.padEnd(10)} ${base}/_omniface`,
           '',
         ]

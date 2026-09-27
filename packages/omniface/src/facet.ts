@@ -177,6 +177,13 @@ export type FacetModule<Config = any, Projection = any, Settings = any> = {
   /** How `llms.txt` introduces the facet when it is on. `a CLI`, `an MCP server (/mcp)`. */
   summary?(settings: Settings): string
 
+  /**
+   * This facet's line in the `omniface dev` banner, where `base` is the URL the server answers on:
+   * what an author would open or run next, and how much of the app it reaches. A facet without
+   * one shows its `summary` there instead.
+   */
+  devHint?(settings: Settings, base: string, manifest: Manifest): string
+
   /** What the generated conformance suite checks about this projection, without calling anything. */
   contract?(ctx: ContractContext, projection: Projection | null): string[]
 

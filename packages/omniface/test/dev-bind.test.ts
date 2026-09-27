@@ -75,6 +75,14 @@ describe('omniface dev', () => {
     expect(await reachable(lan, port)).toBe(true)
   }, 20_000)
 
+  it('puts the MCP tool count, the screen count and the CLI bin on the banner', async () => {
+    const { port, banner } = await dev()
+    const base = `http://localhost:${port}`
+    expect(banner).toMatch(new RegExp(`${base}/mcp {2}\\(\\d+ tool\\(s\\)\\)`))
+    expect(banner).toMatch(new RegExp(`${base}/app {2}\\(\\d+ screen\\(s\\)\\)`))
+    expect(banner).toContain(`node .omniface/cli/bin.mjs --base-url ${base}`)
+  }, 20_000)
+
   it('says the port is taken, and prints no banner, when it cannot bind', async () => {
     const port = await freePort()
     const holder = createNetServer()
