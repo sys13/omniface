@@ -16,7 +16,7 @@ Your pass: change the **Verdict** column where you disagree and leave a note in 
 | --- | --- | --- | --- | --- |
 | ★ Operations: `op({ input, output }).handle()` with Standard Schema | 2 2 2 1 2 2 | 11 | want | **Built.** The unit everything else hangs off. |
 | ★ Naming conventions per facet (camel / snake / kebab, path & command derivation) | 2 2 1 2 2 2 | 11 | want | **Built.** Where "tiny input, huge output" actually comes from. |
-| ★ Conformance test generation (every op × every facet) | 2 2 2 2 1 2 | 11 | want | **Built: `conformanceCases()` derives contract, `invalid_input`, `anonymous`, `forbidden`, `not_found` and read-agreement cases for every op from its traits and schema; only write inputs and read fixtures are hand-supplied. No CLI command yet.** The proof that facets behave identically. |
+| ★ Conformance test generation (every op × every facet) | 2 2 2 2 1 2 | 11 | want | **Built: `conformanceCases()` derives, for every op on every facet it reaches, a contract check plus the call-based cases its traits imply — the list is `CHECKS`, exported from `@omniface/testing`. Only write inputs and read fixtures are hand-supplied. `omniface conformance [--strict]` runs it from a terminal or CI.** The proof that facets behave identically. |
 | ★ Op traits: `readonly`, `destructive`, `idempotent`, `paginated`, `scope`, `cost` | 2 2 2 1 1 2 | 10 | want | **Built (plus `public`, `internal`).** Intent declared once, interpreted per facet. |
 | ★ Field traits: `pii`, `internal`, `sensitive`, `deprecated` | 2 1 2 1 2 2 | 10 | want | **Built.** Drives redaction, visibility, docs, MCP hiding. Storage decided in SCHEMA.md. |
 | ★ `omniface/zod` adapter (scalars, JSON Schema, wrapper lookup, metadata copying) | 2 2 1 2 1 2 | 10 | want | **Built.** The first per-library adapter; everything schema-related goes through it. |
@@ -28,7 +28,7 @@ Your pass: change the **Verdict** column where you disagree and leave a note in 
 | ★ Typed per-facet overrides (naming, shape, binding, behavior) | 1 2 1 1 2 2 | 9 | want | **Built; unknown op ids fail `tsc` and startup.** Required by the thesis; kept to four kinds. |
 | ★ Unified typed error model (`NotFound`, `Forbidden`, `RateLimited`…) | 2 2 2 1 1 1 | 9 | want | **Built.** Each facet renders errors its own way from one source. |
 | ★ Pagination primitive | 2 1 2 1 1 2 | 9 | want | **Built (`t.pageInput`, `t.page`, `paginate`).** The most common thing facets get subtly different. |
-| Declared events (`op.emits(TaskCreated)`) | 2 1 2 1 1 2 | 9 | want | One source for webhooks, SSE, and queues later. |
+| Declared events (`op.emits(TaskCreated)`) | 2 1 2 1 1 2 | 9 | want | **Built: the declaration, the manifest catalog, `emit()` checked against it, and `app.subscribe()`; no delivery yet.** One source for webhooks, SSE, and queues later. |
 | Streaming ops (`stream: Event`) | 2 1 1 1 0 2 | 7 | maybe | Needed for LLM-ish apps; semantics differ a lot per facet. |
 | Long-running ops (`async: true` → job handle) | 2 1 1 1 0 2 | 7 | maybe | Pull in once there's a real slow op. |
 | ★ MCP tool composition (several ops → one intent-level tool) | 1 2 0 1 1 2 | 7 | want | **Built.** Promoted by decision (DX.md): explicit override; grouped tools still run the pipeline per op. |
@@ -74,16 +74,16 @@ Your pass: change the **Verdict** column where you disagree and leave a note in 
 | ★ Structured logging with `facet`, `op`, `actor`, request id | 2 2 2 2 2 2 | 12 | want | **Built.** Cheapest, highest-signal plugin. |
 | ★ Rate limiting (per key / user / tenant / op, cost-aware) | 2 2 2 2 1 2 | 11 | want | **Built.** The "add one line, all facets change" demo. |
 | ★ Scopes + `authorize` hook | 2 2 2 1 2 2 | 11 | want | **Built.** Authorization without building a policy engine. |
-| ★ Auth (adapters over Better Auth / Clerk / WorkOS / JWT) | 2 2 2 1 1 2 | 10 | want | **Partly built: API-key auth only; Better Auth / Clerk / WorkOS / JWT adapters not yet.** Integrate identity (Gate 4); own how it appears per facet. |
-| ★ API keys | 2 2 2 1 1 2 | 10 | want | **Built (in-memory store behind an interface).** Shows a plugin adding ops, schema, and CLI commands. |
+| ★ Auth (adapters over Better Auth / Clerk / WorkOS / JWT) | 2 2 2 1 1 2 | 10 | want | **Built: API-key, JWT, Better Auth, Clerk and WorkOS adapters behind one `AuthAdapter`.** Integrate identity (Gate 4); own how it appears per facet. |
+| ★ API keys | 2 2 2 1 1 2 | 10 | want | **Built (in-memory, file and SQL stores behind one interface).** Shows a plugin adding ops, schema, and CLI commands. |
 | Idempotency keys | 2 1 2 2 1 2 | 10 | want | **Built: `idempotency()` fills the pipeline stage; store behind an interface; REST header, SDK/CLI keys, MCP `_meta`; conflict on key reuse and on in-flight; failures leave no record.** Pairs with the `idempotent` trait. |
-| OpenTelemetry tracing + metrics | 2 1 2 2 1 2 | 10 | want | Standard; RED metrics tagged by facet. |
+| OpenTelemetry tracing + metrics | 2 1 2 2 1 2 | 10 | want | **Built (`otel()`).** Standard; RED metrics tagged by facet. |
 | Audit log (actor incl. agent-on-behalf-of-user) | 2 1 2 2 1 2 | 10 | want | **Built.** Agents need their own actor type. |
 | ★ Pipeline with named stages (`authenticate → … → encode`) | 2 2 2 1 1 1 | 9 | want | **Built.** The thing that makes Gate 1 enforceable. |
-| ★ Plugin API: schema, traits, context, hooks, ops, per-facet adapters | 2 2 2 1 0 2 | 9 | want | **Partly built: schema, traits, context, hooks, wrap, ops; per-facet `adapters` slot not yet.** The Better Auth-style core. |
+| ★ Plugin API: schema, traits, context, hooks, ops, per-facet adapters | 2 2 2 1 0 2 | 9 | want | **Built: schema, traits, context, hooks, wrap, ops and the per-facet `adapters` slot — which still names a fixed set of facets, so a plugin cannot reach an authored one.** The Better Auth-style core. |
 | ★ Typed context contribution (`ctx.user`, `ctx.tenant`) | 2 1 1 2 1 2 | 9 | want | **Built.** Plugins must be type-safe to feel good. |
 | Plugin prerequisites + ordering checks | 1 1 1 2 2 2 | 9 | want | **Built.** Borrowed from maxstack bundles. |
-| CORS / CSRF / security headers | — | — | want | Table stakes for REST; default-on. |
+| CORS / CSRF / security headers | — | — | want | **Built.** Table stakes for REST; default-on. |
 | Quotas / usage metering | 2 1 1 1 0 2 | 7 | maybe | Emit usage events; leave billing to someone else. |
 | Multi-tenancy (tenant resolution + scoping) | 2 1 2 1 0 1 | 7 | maybe | Real SaaS needs it; design it into ctx early. |
 | Caching / ETags | 1 0 1 2 1 2 | 7 | maybe | Mostly REST and SDK. |
@@ -101,7 +101,7 @@ Your pass: change the **Verdict** column where you disagree and leave a note in 
 | ★ Inspector web page (side by side, try it, live pipeline trace) | 2 2 2 2 1 2 | 11 | want | **Partly built: side-by-side view and pipeline; no try-it or live trace yet.** Makes the thesis visible in one screen; the MVP demo. Try-it and the trace are now [E11](BACKLOG.md#e11--playground) — running an op from the page is a product, not a feature of the page. |
 | ★ `omniface dev` serves every facet + playground | 2 2 1 2 1 2 | 10 | want | **Partly built: serves REST, MCP and the inspector; no playground or watch mode yet.** One command, every facet live. The playground half is [E11](BACKLOG.md#e11--playground); the watch loop stays in E7. |
 | Override budget lint | 1 1 2 1 2 2 | 9 | want | **Built.** Warns once more than a third of a facet's ops carry a per-op override. Stops overrides from taking over the definition. |
-| Plugin authoring kit + plugin conformance tests | 2 1 2 1 1 2 | 9 | want | Needed before third-party plugins. |
+| Plugin authoring kit + plugin conformance tests | 2 1 2 1 1 2 | 9 | want | **Built: [PLUGINS.md](PLUGINS.md), `examples/plugin-template` and `pluginCases()`.** Needed before third-party plugins. |
 | `omniface init` templates | 1 1 0 2 2 2 | 8 | maybe | Nice to have; one example app is enough at first. |
 | Build-time tooling split out of the runtime package (`omniface/build`) | 1 0 1 2 1 2 | 7 | maybe | **Undecided, 2026-09-20.** Raised as "turn each output into a plugin to keep the core smaller". The plugin half is a no: `Plugin` is a per-invocation contract (every slot takes an `Invocation`), so a build-time emitter would bolt a second lifecycle onto it and make Gate 1 vacuous for half the list — and `plugins: []` would then decide what `omniface build` writes, next to the `facets: {}` knob that already implies it. The packaging half stands on its own and is what is open: `diff` (819 lines), `sdk` (392), `fix` (332), `lint` (213), `openapi` (144) and `build` (99) only ever run under `npx omniface`, yet ship in the package every app imports at runtime. The seam already exists — those emitters take a `Manifest`, not an `App`; the snag is `llms.txt`, which goes through `inspectAll(app)`. A registered `Emitter` (`Manifest → files`, held by the CLI, not by the app) is a separate question, and only earns its keep once a third-party output asks for it — a Python SDK, GraphQL SDL. |
 | Agent authoring (skills + MCP for editing a facet app) | 1 0 0 2 1 2 | 6 | maybe | Borrow maxstack's approach once the API is stable. |
