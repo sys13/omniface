@@ -106,6 +106,15 @@ function forbidden(message: string): Response {
   })
 }
 
+/** Add `value` to `Vary` unless it, or `*`, is already listed. */
+function appendVary(headers: Headers, value: string): void {
+  const current = headers.get('vary')
+  if (!current) return headers.set('vary', value)
+  const listed = current.split(',').map((v) => v.trim().toLowerCase())
+  if (listed.includes('*') || listed.includes(value.toLowerCase())) return
+  headers.set('vary', `${current}, ${value}`)
+}
+
 /**
  * One middleware for all three concerns, in the order a browser applies them: answer the
  * preflight, refuse a cross-origin write, then set the headers on whatever is returned.
@@ -167,7 +176,9 @@ export function securityMiddleware(config: SecurityConfig | false | undefined = 
     await next()
 
     // The response exists by now, so write onto it directly: `c.header()` is for the route.
-    const set = (name: string, value: string) => c.res.headers.set(name, value)
+    // `Vary` is added to, never replaced: a value set upstream keys the cache as much as ours.
+    const set = (name: string, value: string) =>
+      name === 'vary' ? appendVary(c.res.headers, value) : c.res.headers.set(name, value)
 
     if (cors && allowed && origin) {
       for (const [k, v] of Object.entries(corsHeaders(origin))) set(k, v)
