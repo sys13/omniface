@@ -20,6 +20,8 @@ export type ApiKeyRecord = {
 /**
  * Where keys live. The built-in store is in memory; `fileKeyStore` and `sqlKeyStore` are the
  * durable ones, and anything else that satisfies this interface works the same way.
+ * `fileKeyStore` is for one process per file: two processes sharing it can lose each other's
+ * writes, revocations included. More than one process means `sqlKeyStore`.
  *
  * `@omniface/testing`'s `apiKeyStoreCases()` is the conformance suite every implementation should pass.
  */
@@ -65,6 +67,7 @@ export type SeedKey = { key: string; principalId: string; name?: string; kind?: 
 export type ApiKeysOptions = {
   /** Keys that exist at startup (e.g. from env). */
   keys?: SeedKey[]
+  /** Default: in memory. `fileKeyStore` is single-process; share keys across processes with `sqlKeyStore`. */
   store?: ApiKeyStore
   /** Prefix for generated keys, e.g. "acme_". */
   prefix?: string
