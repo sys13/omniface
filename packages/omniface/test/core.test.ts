@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { buildManifest, defineFacet, errors, facet, facetModule, inspectOp, registerFacet, toJSONSchema, type FacetsConfig, type OpIds } from '../src/index.ts'
+import { buildManifest, defineFacet, errors, facet, facetModule, inspectOp, registerFacet, toJSONSchema, type FacetsConfig, type OpIds, type OpInput, type OpOutput } from '../src/index.ts'
 import { buildOpenApi } from '../src/facets/openapi.ts'
 import { redact, stripInternal } from '../src/jsonschema.ts'
-import { scopes } from '../src/plugins/index.ts'
+import { apiKeys, scopes } from '../src/plugins/index.ts'
 import { t } from '../src/zod/index.ts'
 import { cliOf, cliSettings, mcpOf, mcpTools, restOf, sdkOf } from 'omniface'
 
@@ -133,6 +133,40 @@ describe('overrides', () => {
         facets: { unguarded: { ops: ['notes.nope'] } },
       }),
     ).toThrow(/unknown ops.*unguarded\.ops: "notes\.nope"/)
+  })
+})
+
+// Compile-time checks: a mismatch fails `pnpm typecheck`, not the test run.
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false
+type IsNever<T> = [T] extends [never] ? true : false
+const assertType = <T extends true>(_?: T) => {}
+
+describe('op types by id', () => {
+  function typedApp() {
+    const f = facet({ plugins: [apiKeys(), scopes()] })
+    return f.app({
+      name: 'typed',
+      ops: {
+        notes: {
+          create: f
+            .op({ input: z.object({ body: z.string(), pinned: z.boolean().default(false) }), output: z.object({ id: z.string() }) })
+            .handle(() => ({ id: 'n1' })),
+        },
+      },
+    })
+  }
+  type App = ReturnType<typeof typedApp>
+
+  it('names a nested op\'s input (before defaults) and output by its dotted id', () => {
+    assertType<Equal<OpInput<App, 'notes.create'>, { body: string; pinned?: boolean | undefined }>>()
+    assertType<Equal<OpOutput<App, 'notes.create'>, { id: string }>>()
+    expect(typedApp().name).toBe('typed')
+  })
+
+  it('reaches a plugin\'s ops, and refuses an id that is not one', () => {
+    assertType<Equal<IsNever<OpOutput<App, 'apiKeys.list'>>, false>>()
+    // @ts-expect-error: 'notes.nope' is not an op id
+    assertType<IsNever<OpInput<App, 'notes.nope'>>>()
   })
 })
 

@@ -11,7 +11,7 @@ import { stripInternal, toJSONSchema } from './jsonschema.ts'
 import { conventionalCommand, type HttpMethod } from './naming.ts'
 import { anonymous, createOpFactory, isOp, type FacetName, type Op, type OpFactory, type OpsTree } from './op.ts'
 import { STAGES, type Credential, type HookStage, type Invocation, type Plugin, type RegisteredOp } from './plugin.ts'
-import { validate } from './standard.ts'
+import { validate, type InferIn, type InferOut } from './standard.ts'
 
 // ---------------------------------------------------------------------------------------------
 // Types
@@ -36,6 +36,27 @@ export type OpIds<T, Prefix extends string = '', D extends number = 6> = [D] ext
     : {
         [K in keyof T & string]: T[K] extends Op<any, any> ? `${Prefix}${K}` : OpIds<T[K], `${Prefix}${K}.`, Depth[D]>
       }[keyof T & string]
+
+/** The op at a dotted id in an ops tree: `OpAt<Ops, 'tasks.create'>`. */
+export type OpAt<T, Id extends string> = Id extends `${infer Head}.${infer Rest}`
+  ? Head extends keyof T
+    ? OpAt<T[Head], Rest>
+    : never
+  : Id extends keyof T
+    ? T[Id]
+    : never
+
+/** An app's ops tree, its plugins' ops included. */
+export type OpsOf<A> = A extends { readonly '~ops'?: infer O } ? NonNullable<O> : never
+
+/**
+ * What an op accepts, before defaults: `OpInput<typeof app, 'tasks.create'>`. For code that calls
+ * `app.invoke` in-process and wants the types the op already declares.
+ */
+export type OpInput<A, Id extends OpIds<OpsOf<A>>> = OpAt<OpsOf<A>, Id> extends Op<infer I, any> ? InferIn<I> : never
+
+/** What an op returns: `OpOutput<typeof app, 'tasks.create'>`. */
+export type OpOutput<A, Id extends OpIds<OpsOf<A>>> = OpAt<OpsOf<A>, Id> extends Op<any, infer O> ? InferOut<O> : never
 
 export type RestOverride = { method?: HttpMethod; path?: string; status?: number }
 export type RestConfig<Id extends string = string> = {

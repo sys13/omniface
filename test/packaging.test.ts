@@ -136,7 +136,7 @@ describe('public API surface', () => {
       'JSONSchema', 'LintFinding', 'LintOptions', 'MANIFEST_VERSION', 'MASK', 'MCP_TOOL_BUDGET', 'Manifest',
       'ManifestAdapters', 'ManifestChange', 'ManifestDiff', 'ManifestEvent', 'ManifestOp', 'ManifestScreen', 'ManifestTool',
       'McpCallContext', 'McpConfig', 'McpFacetAdapter', 'McpOverride', 'McpProjection', 'McpSettings', 'McpToolGroup',
-      'NormalizedFacets', 'OAuthResourceConfig', 'OVERRIDE_BUDGET', 'Op', 'OpBuilder', 'OpConfig', 'OpFactory', 'OpIds',
+      'NormalizedFacets', 'OAuthResourceConfig', 'OVERRIDE_BUDGET', 'Op', 'OpBuilder', 'OpConfig', 'OpFactory', 'OpAt', 'OpIds', 'OpInput', 'OpOutput', 'OpsOf',
       'OpInspection', 'OpTraits', 'OpsTree', 'OriginMatcher', 'PROTECTED_RESOURCE_PATH', 'Plugin', 'PluginAdapters',
       'PresentationContext', 'Principal', 'ProjectionContext', 'RESERVED_CLI_COMMANDS', 'RESERVED_CLI_FLAGS',
       'RESERVED_SDK_OPTIONS', 'RegisteredOp', 'RestConfig', 'RestFacetAdapter', 'RestOverride', 'RestPluginRoute',
