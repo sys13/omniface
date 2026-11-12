@@ -17,6 +17,7 @@ bump promises about it.
 | Name | What |
 | --- | --- |
 | `facet`, `Facet`, `App`, `AppConfig`, `FacetsConfig`, `OpIds`, `InvokeInit`, `NormalizedFacets` | The app factory and its configuration |
+| `OpAt`, `OpsOf`, `OpInput`, `OpOutput` | An op's types by dotted id (`OpInput<typeof app, 'tasks.create'>`), plugin ops included: for code that calls `app.invoke` in-process |
 | `RestConfig`, `RestOverride`, `CliConfig`, `CliOverride`, `McpConfig`, `McpOverride`, `McpToolGroup`, `SdkConfig`, `WebConfig`, `WebOverride`, `EventsConfig` | Per-facet configuration and the typed overrides |
 | `op`, `OpBuilder`, `OpConfig`, `OpFactory`, `Op`, `OpsTree`, `HandlerArgs`, `FacetName` | Operations: the builder, what a handler receives, where ops live |
 | `defineEvent`, `EventDefinition`, `isEvent`, `Emit`, `EmittedEvent`, `EventSink` | Declared events: what an op says it emits, what a handler emits with, and what a sink receives |
