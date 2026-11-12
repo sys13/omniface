@@ -104,8 +104,8 @@ export type ApiKeysOptions = {
    */
   authenticate?: boolean
   /**
-   * Scopes `apiKeys.create` refuses to grant, whoever asks (`'*'` matches only the literal
-   * wildcard). For scopes that must stay out of keys even when the caller holds them.
+   * Scopes `apiKeys.create` refuses to grant, whoever asks (a requested scope is refused if it would
+   * satisfy any of these, so `'*'` and `'x:*'` are refused as well as the literal). For scopes that must stay out of keys even when the caller holds them.
    */
   neverGrant?: string[]
   /** Minimum gap between two writes of one key's `lastUsedAt`. Default 60000. 0 writes every time. */
@@ -235,7 +235,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
         .handle(async ({ input, principal }) => {
           const denied = input.scopes.filter((s) => !hasScope(principal.scopes, s))
           if (denied.length) throw errors.forbidden(`Cannot grant scopes you do not hold: ${denied.join(', ')}`)
-          const never = input.scopes.filter((s) => options.neverGrant?.includes(s))
+          const never = input.scopes.filter((s) => options.neverGrant?.some((n) => hasScope([s], n)))
           if (never.length) throw errors.forbidden(`API keys cannot be granted: ${never.join(', ')}`)
           const key = keyPrefix + randomBytes(24).toString('base64url')
           const id = `key_${randomBytes(6).toString('hex')}`

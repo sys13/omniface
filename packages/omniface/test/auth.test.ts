@@ -428,6 +428,12 @@ describe('api key hygiene', () => {
     expect(Date.parse(made.expiresAt) - Date.now()).toBeGreaterThan(29 * 86_400_000)
     await expect(app.invoke('apiKeys.create', { name: 'b', scopes: ['admin'] }, owner)).rejects.toThrow(/cannot be granted/)
     await expect(app.invoke('apiKeys.create', { name: 'b', scopes: ['*'] }, owner)).rejects.toThrow(/cannot be granted/)
+    // A wildcard that would cover a refused scope is refused too; one that covers nothing refused is fine.
+    const f2 = facet({ plugins: [apiKeys({ keys: seed, neverGrant: ['admin:write'] }), scopes()] })
+    const app2 = f2.app({ name: 'hygiene2', ops: {} })
+    for (const bad of [['admin:*'], ['tasks:read', 'admin:*'], ['admin:write'], ['*']])
+      await expect(app2.invoke('apiKeys.create', { name: 'w', scopes: bad }, owner)).rejects.toThrow(/cannot be granted/)
+    await app2.invoke('apiKeys.create', { name: 'ok', scopes: ['tasks:*'] }, owner)
     const list = (await app.invoke('apiKeys.list', {}, owner)) as { items: { expiresAt: string | null; revoked: boolean }[] }
     expect(list.items.map((k) => k.expiresAt === null)).toEqual([true, false])
     // revokeAll takes the caller's own key too, so the repeat is refused at the door.
