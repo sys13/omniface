@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { facet, FacetError, type AuthAdapter } from '../src/index.ts'
 import {
@@ -13,7 +13,7 @@ import {
   workOsJwksUri,
   workosAdapter,
 } from '../src/auth/index.ts'
-import { apiKeys, memoryKeyStore, scopes } from '../src/plugins/index.ts'
+import { apiKeys, hashApiKey, memoryKeyStore, scopes } from '../src/plugins/index.ts'
 import { createRestApp } from '../src/facets/rest.ts'
 
 // ---------------------------------------------------------------------------------------------
@@ -383,5 +383,61 @@ describe('apiKeys as one provider among several', () => {
     await app.invoke('apiKeys.list', {}, { facet: 'rest', credential })
     await keys.adapter.authenticate(ctx(KEY))
     expect(inserted).toEqual(['key_seed_0', 'key_seed_1'])
+  })
+})
+
+describe('api key hygiene', () => {
+  const seed = [{ key: KEY, principalId: 'user_key', scopes: ['*'] }]
+  const owner = { facet: 'rest', credential: { type: 'bearer', token: KEY } } as never
+
+  it('refuses an expired key and still accepts one that has not', async () => {
+    const store = memoryKeyStore()
+    const adapter = apiKeyAdapter({ store, keys: seed })
+    await adapter.authenticate(ctx(KEY))
+    const row = (await store.findByHash(hashApiKey(KEY)))!
+    row.expiresAt = new Date(Date.now() + 60_000).toISOString()
+    expect((await adapter.authenticate(ctx(KEY)))?.principal.id).toBe('user_key')
+    row.expiresAt = new Date(Date.now() - 1).toISOString()
+    await expect(adapter.authenticate(ctx(KEY))).rejects.toThrow(/expired/)
+  })
+
+  it('writes last use at most once per interval, and records the client', async () => {
+    const store = memoryKeyStore()
+    const touch = vi.spyOn(store, 'touch')
+    const adapter = apiKeyAdapter({ store, keys: seed, touchIntervalMs: 60_000 })
+    const withUa = { ...ctx(KEY), headers: new Headers({ 'user-agent': 'claude-code/1' }) }
+    for (let i = 0; i < 5; i++) await adapter.authenticate(withUa)
+    expect(touch).toHaveBeenCalledTimes(1)
+    const row = (await store.findByHash(hashApiKey(KEY)))!
+    expect(row.lastUsedAt).toBeTruthy()
+    expect(row.lastUsedClient).toBe('claude-code/1')
+    // With no throttle every call writes.
+    const eager = apiKeyAdapter({ store, touchIntervalMs: 0 })
+    await eager.authenticate(ctx(KEY))
+    await eager.authenticate(ctx(KEY))
+    expect(touch).toHaveBeenCalledTimes(3)
+  })
+
+  it('creates a key with an expiry, lists it, and revokes all of them', async () => {
+    const plugin = apiKeys({ keys: seed, revokeAll: true, neverGrant: ['*', 'admin'] })
+    const f = facet({ plugins: [plugin, scopes()] })
+    const app = f.app({ name: 'hygiene', ops: {} })
+    const made = (await app.invoke('apiKeys.create', { name: 'a', scopes: ['tasks:read'], expiresInDays: 30 }, owner)) as {
+      expiresAt: string
+    }
+    expect(Date.parse(made.expiresAt) - Date.now()).toBeGreaterThan(29 * 86_400_000)
+    await expect(app.invoke('apiKeys.create', { name: 'b', scopes: ['admin'] }, owner)).rejects.toThrow(/cannot be granted/)
+    await expect(app.invoke('apiKeys.create', { name: 'b', scopes: ['*'] }, owner)).rejects.toThrow(/cannot be granted/)
+    const list = (await app.invoke('apiKeys.list', {}, owner)) as { items: { expiresAt: string | null; revoked: boolean }[] }
+    expect(list.items.map((k) => k.expiresAt === null)).toEqual([true, false])
+    // revokeAll takes the caller's own key too, so the repeat is refused at the door.
+    expect(await app.invoke('apiKeys.revokeAll', {}, owner)).toEqual({ revoked: 2 })
+    await expect(app.invoke('apiKeys.revokeAll', {}, owner)).rejects.toThrow(/revoked/)
+  })
+
+  it('has no revokeAll op unless asked for', async () => {
+    const f = facet({ plugins: [apiKeys(), scopes()] })
+    const app = f.app({ name: 'plain', ops: {} })
+    await expect(app.invoke('apiKeys.revokeAll', {}, owner)).rejects.toThrow()
   })
 })

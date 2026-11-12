@@ -15,6 +15,12 @@ export type ApiKeyRecord = {
   principal: Omit<Principal, 'scopes'>
   createdAt: string
   revokedAt?: string
+  /** ISO time after which the key is refused. Absent: never expires. */
+  expiresAt?: string
+  /** ISO time the key last authenticated, to within the adapter's throttle. */
+  lastUsedAt?: string
+  /** Who used it last (the client's User-Agent), truncated. */
+  lastUsedClient?: string
 }
 
 /**
@@ -34,6 +40,10 @@ export interface ApiKeyStore {
   listFor(principalId: string): Promise<ApiKeyRecord[]>
   /** False when the key does not exist, belongs to someone else, or is already revoked. */
   revoke(id: string, principalId: string): Promise<boolean>
+  /** Revoke every active key of one principal. Returns how many were revoked. */
+  revokeAll(principalId: string): Promise<number>
+  /** Stamp last use. The adapter calls this at most once per key per `touchIntervalMs`. */
+  touch(id: string, at: string, client?: string): Promise<void>
 }
 
 export function memoryKeyStore(): ApiKeyStore {
@@ -54,6 +64,22 @@ export function memoryKeyStore(): ApiKeyStore {
       if (!row || row.principal.id !== principalId || row.revokedAt) return false
       row.revokedAt = new Date().toISOString()
       return true
+    },
+    async revokeAll(principalId) {
+      let n = 0
+      for (const row of rows.values()) {
+        if (row.principal.id !== principalId || row.revokedAt) continue
+        row.revokedAt = new Date().toISOString()
+        n++
+      }
+      return n
+    },
+    async touch(id, at, client) {
+      const row = rows.get(id)
+      if (!row) return
+      row.lastUsedAt = at
+      if (client) row.lastUsedClient = client
+      else delete row.lastUsedClient
     },
   }
 }
@@ -77,6 +103,14 @@ export type ApiKeysOptions = {
    * fall through to the next provider rather than being rejected here.
    */
   authenticate?: boolean
+  /**
+   * Scopes `apiKeys.create` refuses to grant, whoever asks (`'*'` matches only the literal
+   * wildcard). For scopes that must stay out of keys even when the caller holds them.
+   */
+  neverGrant?: string[]
+  /** Minimum gap between two writes of one key's `lastUsedAt`. Default 60000. 0 writes every time. */
+  touchIntervalMs?: number  /** Add `apiKeys.revokeAll`, which revokes every active key of the caller. Default false: it is one more tool for agents to choose from. */
+  revokeAll?: boolean
 }
 
 export type ApiKeyAdapterOptions = {
@@ -85,6 +119,8 @@ export type ApiKeyAdapterOptions = {
   keys?: SeedKey[]
   /** Adapter name, for `ctx.auth.adapter`. Default `api-key`. */
   name?: string
+  /** Minimum gap between two writes of one key's `lastUsedAt`. Default 60000. */
+  touchIntervalMs?: number
 }
 
 /** Insert seed keys once, however many callers race for them. */
@@ -114,11 +150,18 @@ function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<
  * rejected: that is this adapter's own verdict, not someone else's token.
  */
 export function apiKeyAdapter(options: ApiKeyAdapterOptions): AuthAdapter {
-  return keyAdapter(options.store, seeder(options.store, options.keys), options.name)
+  return keyAdapter(options.store, seeder(options.store, options.keys), options.name, options.touchIntervalMs)
 }
 
 /** The adapter over a seeder the caller owns, so `apiKeys()` and its adapter seed once between them. */
-function keyAdapter(store: ApiKeyStore, seed: () => Promise<void>, name = 'api-key'): AuthAdapter {
+function keyAdapter(
+  store: ApiKeyStore,
+  seed: () => Promise<void>,
+  name = 'api-key',
+  touchIntervalMs = 60_000,
+): AuthAdapter {
+  /** When each key was last written, so a busy key costs one write per interval, not one per call. */
+  const touched = new Map<string, number>()
   return defineAuthAdapter({
     name,
     async authenticate(ctx) {
@@ -127,6 +170,15 @@ function keyAdapter(store: ApiKeyStore, seed: () => Promise<void>, name = 'api-k
       const row = await store.findByHash(hashKey(ctx.credential.token))
       if (!row) return null
       if (row.revokedAt) throw errors.unauthenticated('API key has been revoked')
+      if (row.expiresAt && Date.parse(row.expiresAt) <= Date.now()) throw errors.unauthenticated('API key has expired')
+      const now = Date.now()
+      const prev = touched.get(row.id)
+      if (prev === undefined || now - prev >= touchIntervalMs) {
+        touched.set(row.id, now)
+        const client = ctx.headers?.get('user-agent')?.slice(0, 200)
+        // Bookkeeping must never fail a request.
+        await store.touch(row.id, new Date(now).toISOString(), client).catch(() => touched.delete(row.id))
+      }
       return {
         principal: { ...row.principal, scopes: row.scopes },
         session: { provider: 'api-key', keyId: row.id, keyName: row.name },
@@ -142,13 +194,17 @@ const KeyInfo = z.object({
   scopes: z.array(z.string()),
   createdAt: z.string(),
   revoked: z.boolean(),
+  expiresAt: z.string().nullable(),
+  expired: z.boolean(),
+  lastUsedAt: z.string().nullable(),
+  lastUsedClient: z.string().nullable(),
 })
 
 export function apiKeys(options: ApiKeysOptions = {}) {
   const store = options.store ?? memoryKeyStore()
   const keyPrefix = options.prefix ?? 'fk_'
   const seed = seeder(store, options.keys)
-  const adapter = keyAdapter(store, seed)
+  const adapter = keyAdapter(store, seed, undefined, options.touchIntervalMs)
 
   const ops = {
     auth: {
@@ -162,15 +218,30 @@ export function apiKeys(options: ApiKeysOptions = {}) {
     apiKeys: {
       create: op({
         description: 'Create an API key for the current principal. The secret is shown once.',
-        input: z.object({ name: z.string().min(1), scopes: z.array(z.string()).min(1) }),
-        output: z.object({ id: z.string(), name: z.string(), key: z.string(), scopes: z.array(z.string()) }),
+        input: z.object({
+          name: z.string().min(1),
+          scopes: z.array(z.string()).min(1),
+          expiresInDays: z.number().int().min(1).max(3650).optional().describe('Days until the key stops working. Omit for never.'),
+        }),
+        output: z.object({
+          id: z.string(),
+          name: z.string(),
+          key: z.string(),
+          scopes: z.array(z.string()),
+          expiresAt: z.string().nullable(),
+        }),
       })
         .traits({ scope: 'apiKeys:write' })
         .handle(async ({ input, principal }) => {
           const denied = input.scopes.filter((s) => !hasScope(principal.scopes, s))
           if (denied.length) throw errors.forbidden(`Cannot grant scopes you do not hold: ${denied.join(', ')}`)
+          const never = input.scopes.filter((s) => options.neverGrant?.includes(s))
+          if (never.length) throw errors.forbidden(`API keys cannot be granted: ${never.join(', ')}`)
           const key = keyPrefix + randomBytes(24).toString('base64url')
           const id = `key_${randomBytes(6).toString('hex')}`
+          const expiresAt = input.expiresInDays
+            ? new Date(Date.now() + input.expiresInDays * 86_400_000).toISOString()
+            : undefined
           await store.insert({
             id,
             name: input.name,
@@ -179,8 +250,9 @@ export function apiKeys(options: ApiKeysOptions = {}) {
             scopes: input.scopes,
             principal: { id: principal.id, kind: principal.kind, ...(principal.name ? { name: principal.name } : {}) },
             createdAt: new Date().toISOString(),
+            ...(expiresAt ? { expiresAt } : {}),
           })
-          return { id, name: input.name, key, scopes: input.scopes }
+          return { id, name: input.name, key, scopes: input.scopes, expiresAt: expiresAt ?? null }
         }),
       list: op({
         description: "List the current principal's API keys (never the secrets)",
@@ -198,6 +270,10 @@ export function apiKeys(options: ApiKeysOptions = {}) {
               scopes: r.scopes,
               createdAt: r.createdAt,
               revoked: Boolean(r.revokedAt),
+              expiresAt: r.expiresAt ?? null,
+              expired: Boolean(r.expiresAt && Date.parse(r.expiresAt) <= Date.now()),
+              lastUsedAt: r.lastUsedAt ?? null,
+              lastUsedClient: r.lastUsedClient ?? null,
             })),
             nextCursor: null,
           }
@@ -212,8 +288,16 @@ export function apiKeys(options: ApiKeysOptions = {}) {
           if (!(await store.revoke(input.id, principal.id))) throw errors.notFound(`No active key "${input.id}"`)
           return { id: input.id, revoked: true as const }
         }),
+      revokeAll: op({
+        description: 'Revoke every active API key you own. Requests using them fail immediately.',
+        output: z.object({ revoked: z.number() }),
+      })
+        .traits({ destructive: true, idempotent: true, scope: 'apiKeys:write' })
+        .handle(async ({ principal }) => ({ revoked: await store.revokeAll(principal.id) })),
     },
   }
+
+  if (!options.revokeAll) delete (ops.apiKeys as { revokeAll?: unknown }).revokeAll
 
   const plugin = definePlugin<{}, typeof ops>({
     name: 'apiKeys',

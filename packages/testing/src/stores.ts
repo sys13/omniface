@@ -123,6 +123,38 @@ export function apiKeyStoreCases(options: ApiKeyStoreCaseOptions): StoreCase[] {
       return [...eq('revoke', stolen, false), ...(found?.revokedAt ? ['the key was revoked anyway'] : [])]
     }),
 
+    wrap('revokeAll revokes only that principal\'s active keys and counts them', async (store) => {
+      const a = record()
+      const b = record()
+      const other = record({ principal: { id: 'user_2', kind: 'user' } })
+      await Promise.all([a, b, other].map((r) => store.insert(r)))
+      await store.revoke(a.id, 'user_1')
+      const n = await store.revokeAll('user_1')
+      const again = await store.revokeAll('user_1')
+      const foundB = await store.findByHash(b.hash)
+      const foundOther = await store.findByHash(other.hash)
+      return [
+        ...eq('first revokeAll', n, 1),
+        ...eq('second revokeAll', again, 0),
+        ...(foundB?.revokedAt ? [] : ['an active key was not revoked']),
+        ...(foundOther?.revokedAt ? ["another principal's key was revoked"] : []),
+      ]
+    }),
+
+    wrap('touch records last use and the client', async (store) => {
+      const row = record()
+      await store.insert(row)
+      await store.touch(row.id, '2026-01-01T00:00:00.000Z', 'agent/1')
+      const found = await store.findByHash(row.hash)
+      return [...eq('lastUsedAt', found?.lastUsedAt, '2026-01-01T00:00:00.000Z'), ...eq('client', found?.lastUsedClient, 'agent/1')]
+    }),
+
+    wrap('expiresAt round-trips', async (store) => {
+      const row = record({ expiresAt: '2030-01-01T00:00:00.000Z' })
+      await store.insert(row)
+      return eq('expiresAt', (await store.findByHash(row.hash))?.expiresAt, '2030-01-01T00:00:00.000Z')
+    }),
+
     wrap('concurrent inserts all land', async (store) => {
       const rows = Array.from({ length: 10 }, () => record())
       await Promise.all(rows.map((r) => store.insert(r)))

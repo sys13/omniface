@@ -84,6 +84,29 @@ export function fileKeyStore(options: FileKeyStoreOptions): ApiKeyStore {
         return { keys: keys.map((k) => (k.id === id ? revoked : k)), result: true }
       })
     },
+    async revokeAll(principalId) {
+      return mutate((keys) => {
+        const stamp = new Date().toISOString()
+        let n = 0
+        const next = keys.map((k) => {
+          if (k.principal.id !== principalId || k.revokedAt) return k
+          n++
+          return { ...k, revokedAt: stamp }
+        })
+        return n ? { keys: next, result: n } : { result: 0 }
+      })
+    },
+    async touch(id, at, client) {
+      await mutate((keys) => {
+        if (!keys.some((k) => k.id === id)) return { result: undefined }
+        const next = keys.map((k) => {
+          if (k.id !== id) return k
+          const { lastUsedClient: _drop, ...rest } = k
+          return { ...rest, lastUsedAt: at, ...(client ? { lastUsedClient: client } : {}) }
+        })
+        return { keys: next, result: undefined }
+      })
+    },
   }
 }
 
@@ -117,7 +140,10 @@ export function apiKeyTableSql(table: string = DEFAULT_API_KEY_TABLE): string {
     '  principal_kind TEXT NOT NULL,',
     '  principal_name TEXT,',
     '  created_at TEXT NOT NULL,',
-    '  revoked_at TEXT',
+    '  revoked_at TEXT,',
+    '  expires_at TEXT,',
+    '  last_used_at TEXT,',
+    '  last_used_client TEXT',
     ');',
     `CREATE INDEX IF NOT EXISTS ${table}_hash_idx ON ${table} (hash);`,
     `CREATE INDEX IF NOT EXISTS ${table}_principal_idx ON ${table} (principal_id);`,
@@ -152,6 +178,9 @@ function toRecord(row: Record<string, unknown>): ApiKeyRecord {
     },
     createdAt: String(row.created_at),
     ...(row.revoked_at ? { revokedAt: String(row.revoked_at) } : {}),
+    ...(row.expires_at ? { expiresAt: String(row.expires_at) } : {}),
+    ...(row.last_used_at ? { lastUsedAt: String(row.last_used_at) } : {}),
+    ...(row.last_used_client ? { lastUsedClient: String(row.last_used_client) } : {}),
   }
 }
 
@@ -177,7 +206,7 @@ export function sqlKeyStore(options: SqlKeyStoreOptions): ApiKeyStore {
     Array.from({ length: count }, (_, i) => (numbered ? `$${from + i}` : '?')).join(', ')
   const run = async (sql: string, params: unknown[]) => rowsOf(await options.query(sql, params))
 
-  const COLUMNS = 'id, name, hash, prefix, scopes, principal_id, principal_kind, principal_name, created_at, revoked_at'
+  const COLUMNS = 'id, name, hash, prefix, scopes, principal_id, principal_kind, principal_name, created_at, revoked_at, expires_at, last_used_at, last_used_client'
 
   return {
     async findByHash(hash) {
@@ -188,7 +217,7 @@ export function sqlKeyStore(options: SqlKeyStoreOptions): ApiKeyStore {
       // Insert or replace by id: re-seeding the same startup keys must not fail.
       await options.query(`DELETE FROM ${table} WHERE id = ${p(1)}`, [record.id])
       await options.query(
-        `INSERT INTO ${table} (${COLUMNS}) VALUES (${p(10)})`,
+        `INSERT INTO ${table} (${COLUMNS}) VALUES (${p(13)})`,
         [
           record.id,
           record.name,
@@ -200,6 +229,9 @@ export function sqlKeyStore(options: SqlKeyStoreOptions): ApiKeyStore {
           record.principal.name ?? null,
           record.createdAt,
           record.revokedAt ?? null,
+          record.expiresAt ?? null,
+          record.lastUsedAt ?? null,
+          record.lastUsedClient ?? null,
         ],
       )
     },
@@ -209,6 +241,24 @@ export function sqlKeyStore(options: SqlKeyStoreOptions): ApiKeyStore {
         [principalId],
       )
       return rows.map(toRecord)
+    },
+    async revokeAll(principalId) {
+      // No RETURNING: not every driver hands rows back from an UPDATE. Count, then update.
+      const mark = (n: number) => (numbered ? '$' + n : '?')
+      const active = await run(`SELECT id FROM ${table} WHERE principal_id = ${mark(1)} AND revoked_at IS NULL`, [principalId])
+      if (!active.length) return 0
+      await options.query(
+        `UPDATE ${table} SET revoked_at = ${mark(1)} WHERE principal_id = ${mark(2)} AND revoked_at IS NULL`,
+        [new Date().toISOString(), principalId],
+      )
+      return active.length
+    },
+    async touch(id, at, client) {
+      const mark = (n: number) => (numbered ? '$' + n : '?')
+      await options.query(
+        `UPDATE ${table} SET last_used_at = ${mark(1)}, last_used_client = ${mark(2)} WHERE id = ${mark(3)}`,
+        [at, client ?? null, id],
+      )
     },
     async revoke(id, principalId) {
       // A conditional UPDATE does the work, so two racing revokes cannot both stamp the row.
