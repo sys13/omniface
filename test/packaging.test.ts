@@ -151,7 +151,7 @@ describe('public API surface', () => {
       'facetModules', 'formatDiff', 'getFieldTraits', 'hasTrait', 'humanLabel', 'inspectAll', 'inspectOp', 'isEvent',
       'isUntrusted', 'lint', 'mcpOf', 'mcpSettings', 'mcpTools', 'oauthChallenge',
       'objectProperties', 'op', 'paginate', 'planNamedTypeFixes', 'presentFields', 'presentValue', 'projectionOf',
-      'protectedResourceMetadata', 'publicSchema', 'redact', 'registerFacet', 'registerSchemaAdapter', 'renderIndex',
+      'protectedResourceMetadata', 'protectedResourceMetadataUrl', 'publicSchema', 'redact', 'registerFacet', 'registerSchemaAdapter', 'renderIndex',
       'renderScreen', 'requiredProperties', 'restNamespace', 'restOf', 'sdkOf', 'sdkSettings', 'securityMiddleware',
       'serve', 'setFieldTraits', 'setSchemaName', 'settingsOf', 'stripInternal', 'tableColumns', 'toFacetError',
       'toJSONSchema', 'validate', 'verdict', 'webOf', 'webSettings', 'webTools',

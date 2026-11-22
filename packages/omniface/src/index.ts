@@ -74,6 +74,7 @@ export {
   challenge as oauthChallenge,
   declaredScopes,
   protectedResourceMetadata,
+  protectedResourceMetadataUrl,
   PROTECTED_RESOURCE_PATH,
   type OAuthResourceConfig,
 } from './facets/oauth.ts'

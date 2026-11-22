@@ -73,9 +73,20 @@ export function protectedResourceMetadata(
  * refusal itself where to go, rather than having to know in advance.
  */
 export function challenge(config: OAuthResourceConfig, origin: string, error?: 'invalid_token'): string {
-  const url = `${config.resource ?? origin}${PROTECTED_RESOURCE_PATH}`
+  const url = protectedResourceMetadataUrl(config.resource ?? origin)
   const params = [`resource_metadata="${url}"`, ...(error ? [`error="${error}"`] : [])]
   return `Bearer ${params.join(', ')}`
+}
+
+/**
+ * Where a resource's metadata document lives (RFC 9728 §3.1): the well-known path goes between the
+ * host and the resource's own path, so `https://host/mcp` is described at
+ * `https://host/.well-known/oauth-protected-resource/mcp`, not under `/mcp/`.
+ */
+export function protectedResourceMetadataUrl(resource: string): string {
+  const url = new URL(resource)
+  const path = url.pathname.replace(/\/+$/, '')
+  return `${url.protocol}//${url.host}${PROTECTED_RESOURCE_PATH}${path}`
 }
 
 /** The origin a request arrived on, for the `resource` default. */

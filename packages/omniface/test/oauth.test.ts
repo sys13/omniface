@@ -4,7 +4,7 @@ import { apiKeys, scopes } from '../src/plugins/index.ts'
 import { facet, type OAuthResourceConfig } from '../src/index.ts'
 import { createMcpHttpHandler, type McpHttpOptions } from '../src/facets/mcp.ts'
 import { createRestApp } from '../src/facets/rest.ts'
-import { PROTECTED_RESOURCE_PATH } from '../src/facets/oauth.ts'
+import { PROTECTED_RESOURCE_PATH, protectedResourceMetadataUrl } from '../src/facets/oauth.ts'
 
 /**
  * Backlog 2.6, the discovery half: where a caller with no credential goes to get one (RFC 9728).
@@ -143,13 +143,14 @@ describe('MCP over HTTP, for an endpoint that needs a token', () => {
   it('refuses a credential-less request with 401 and the challenge, as the MCP spec asks', async () => {
     const res = await send({ oauth: mcpResource, unauthenticated: 'refuse' })
     expect(res.status).toBe(401)
-    expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="http://api.test/mcp${PROTECTED_RESOURCE_PATH}"`)
+    // RFC 9728 §3.1: the well-known path goes before the resource's own path, not under it.
+    expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="http://api.test${PROTECTED_RESOURCE_PATH}/mcp"`)
   })
 
   it('takes its own description over the app one, so MCP can point somewhere REST does not', async () => {
     const res = await send({ oauth: mcpResource }, {}, declared)
     expect(res.status).toBe(200)
-    expect(res.headers.get('www-authenticate')).toContain('http://api.test/mcp/')
+    expect(res.headers.get('www-authenticate')).toContain(`http://api.test${PROTECTED_RESOURCE_PATH}/mcp"`)
   })
 
   it('still serves a credential-less request by default', async () => {
@@ -211,5 +212,13 @@ describe('MCP over HTTP, for an endpoint that needs a token', () => {
     const out = (await res.json()) as { result: { isError?: boolean; content: { text: string }[] } }
     expect(out.result.isError).toBe(true)
     expect(out.result.content[0]!.text).toContain('unauthenticated')
+  })
+})
+
+describe('protectedResourceMetadataUrl', () => {
+  it('puts the well-known path between the host and the resource path (RFC 9728 §3.1)', () => {
+    expect(protectedResourceMetadataUrl('https://h.example/mcp')).toBe(`https://h.example${PROTECTED_RESOURCE_PATH}/mcp`)
+    expect(protectedResourceMetadataUrl('https://h.example:8443/a/b/')).toBe(`https://h.example:8443${PROTECTED_RESOURCE_PATH}/a/b`)
+    expect(protectedResourceMetadataUrl('https://h.example')).toBe(`https://h.example${PROTECTED_RESOURCE_PATH}`)
   })
 })
