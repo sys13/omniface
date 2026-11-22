@@ -8,7 +8,7 @@ import { errors, toFacetError, type FacetError } from '../errors.ts'
 import { objectProperties } from '../jsonschema.ts'
 import { buildManifest, type Manifest } from '../manifest.ts'
 import type { Credential } from '../plugin.ts'
-import { challenge, originOf } from './oauth.ts'
+import { challenge, originOf, type OAuthResourceConfig } from './oauth.ts'
 import { clientFromHeaders, credentialFromHeaders } from './http.ts'
 import { mcpOf, mcpTools } from './mcp.facet.ts'
 
@@ -235,6 +235,44 @@ export type McpHttpOptions = {
   manifest?: Manifest
   /** Where announcements are remembered. Swap it for a shared store behind several instances. */
   registry?: McpClientRegistry
+  /**
+   * The protected-resource description for this endpoint, when it is not the app's own `oauth`
+   * (an app whose MCP endpoint takes OAuth tokens while its REST facet does not, or whose MCP
+   * resource is a path of its own such as `https://host/mcp`). Defaults to `app.oauth`.
+   */
+  oauth?: OAuthResourceConfig
+  /**
+   * What a request with no credential gets, when there is an `oauth` description.
+   *
+   * - `'header'` (the default): it is served, with a `WWW-Authenticate` pointer on the response, so
+   *   an app may still project public ops to MCP.
+   * - `'refuse'`: it is answered `401` with the challenge and never reaches the server. This is what
+   *   the MCP authorization spec asks of a server that needs a token: clients start their OAuth
+   *   flow on the 401, not on a header attached to a 200.
+   */
+  unauthenticated?: 'header' | 'refuse'
+  /**
+   * Recognises a presented credential at the transport, before the request is served. Return
+   * `false` and the request is answered `401` with `error="invalid_token"` (when there is an `oauth`
+   * description; a bare `401` otherwise), which is how an OAuth client learns to refresh. Without
+   * it, an expired token is served and every tool call fails as a tool error, which no client
+   * reads as "refresh".
+   *
+   * This is recognition, not authority: a credential it accepts is still authenticated, scoped and
+   * authorized by the pipeline on every call, exactly as before. Return `true` for any credential
+   * this check does not know about, so another adapter still gets its turn.
+   */
+  verifyCredential?: (credential: Credential, request: Request) => boolean | Promise<boolean>
+}
+
+function refusal(oauth: OAuthResourceConfig | undefined, request: Request, error?: 'invalid_token'): Response {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  if (oauth) headers.set('www-authenticate', challenge(oauth, originOf(request), error))
+  const message = error ? 'The access token is invalid or has expired' : 'Authentication required'
+  return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32001, message }, id: null }), {
+    status: 401,
+    headers,
+  })
 }
 
 /** A fetch-style handler for MCP over Streamable HTTP (stateless). Credential from request headers. */
@@ -242,6 +280,11 @@ export function createMcpHttpHandler(app: App, manifest: Manifest = buildManifes
   const registry = options.registry ?? memoryClientRegistry()
   return async (request: Request): Promise<Response> => {
     const credential = credentialFromHeaders(request.headers)
+    const oauth = options.oauth ?? app.oauth
+    if (!credential && oauth && options.unauthenticated === 'refuse') return refusal(oauth, request)
+    if (credential && options.verifyCredential && !(await options.verifyCredential(credential, request))) {
+      return refusal(oauth, request, 'invalid_token')
+    }
     const key = attributionKey(request.headers, credential)
     if (request.method === 'POST') {
       // The transport consumes the body, so the peek happens on a clone.
@@ -268,7 +311,6 @@ export function createMcpHttpHandler(app: App, manifest: Manifest = buildManifes
     // The same pointer REST puts on a refusal, on the transport an agent actually reaches. It is a
     // header rather than a 401: an app may project public ops to MCP, and turning every
     // credential-less call into a refusal would decide that policy here. See the backlog.
-    const oauth = app.oauth
     if (oauth && !credential) {
       response.headers.set('www-authenticate', challenge(oauth, originOf(request)))
     }

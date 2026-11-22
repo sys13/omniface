@@ -125,7 +125,10 @@ in OpenAPI and add a `whoami` command to the CLI.
 `oauth: { authorizationServers: ['https://auth.example.com'] }` — and omniface serves RFC 9728
 protected-resource metadata at `/.well-known/oauth-protected-resource`, puts a `WWW-Authenticate`
 pointing at it on every REST refusal a credential would have fixed, and sets the same header on an
-MCP-over-HTTP response from a caller that presented none. The scopes in the document are derived
+MCP-over-HTTP response from a caller that presented none. An MCP endpoint that needs a token can
+say so the way the MCP authorization spec expects — `unauthenticated: 'refuse'` answers `401` with
+the challenge, and `verifyCredential` turns a stale token into `401 invalid_token` — and can carry an
+`oauth` description of its own when its resource is not the app's. The scopes in the document are derived
 from the ops' `scope` traits rather than listed again, so the document cannot advertise
 authorization the app does not enforce. Nothing about this issues or verifies a token: Gate 4 holds,
 and omniface does not become an authorization server. It is the half of the handshake that was

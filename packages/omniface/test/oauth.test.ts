@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { apiKeys, scopes } from '../src/plugins/index.ts'
 import { facet, type OAuthResourceConfig } from '../src/index.ts'
-import { createMcpHttpHandler } from '../src/facets/mcp.ts'
+import { createMcpHttpHandler, type McpHttpOptions } from '../src/facets/mcp.ts'
 import { createRestApp } from '../src/facets/rest.ts'
 import { PROTECTED_RESOURCE_PATH } from '../src/facets/oauth.ts'
 
@@ -125,5 +125,91 @@ describe('MCP over HTTP', () => {
 
   it('says nothing for an app that has not named an authorization server', async () => {
     expect((await post(undefined)).headers.get('www-authenticate')).toBeNull()
+  })
+})
+
+describe('MCP over HTTP, for an endpoint that needs a token', () => {
+  const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
+  const send = (options: McpHttpOptions, headers: Record<string, string> = {}, oauth?: OAuthResourceConfig) =>
+    createMcpHttpHandler(createApp(oauth), undefined, options)(
+      new Request('http://api.test/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', ...headers },
+        body,
+      }),
+    )
+  const mcpResource: OAuthResourceConfig = { authorizationServers: [AS], resource: 'http://api.test/mcp' }
+
+  it('refuses a credential-less request with 401 and the challenge, as the MCP spec asks', async () => {
+    const res = await send({ oauth: mcpResource, unauthenticated: 'refuse' })
+    expect(res.status).toBe(401)
+    expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="http://api.test/mcp${PROTECTED_RESOURCE_PATH}"`)
+  })
+
+  it('takes its own description over the app one, so MCP can point somewhere REST does not', async () => {
+    const res = await send({ oauth: mcpResource }, {}, declared)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('www-authenticate')).toContain('http://api.test/mcp/')
+  })
+
+  it('still serves a credential-less request by default', async () => {
+    const res = await send({ oauth: mcpResource })
+    expect(res.status).toBe(200)
+  })
+
+  it('does not refuse without a description to point at: refusing would strand the caller', async () => {
+    const res = await send({ unauthenticated: 'refuse' })
+    expect(res.status).toBe(200)
+  })
+
+  it('answers invalid_token for a credential the transport check does not recognise', async () => {
+    const res = await send(
+      { oauth: mcpResource, unauthenticated: 'refuse', verifyCredential: (c) => c.token !== 'expired' },
+      { authorization: 'Bearer expired' },
+    )
+    expect(res.status).toBe(401)
+    expect(res.headers.get('www-authenticate')).toContain('error="invalid_token"')
+  })
+
+  it('serves a credential the check accepts, and the pipeline still decides what it may do', async () => {
+    const seen: string[] = []
+    const res = await send(
+      {
+        oauth: mcpResource,
+        unauthenticated: 'refuse',
+        verifyCredential: (c) => {
+          seen.push(c.token)
+          return true
+        },
+      },
+      { authorization: 'Bearer k_admin' },
+    )
+    expect(res.status).toBe(200)
+    expect(seen).toEqual(['k_admin'])
+    const listed = (await res.json()) as { result: { tools: unknown[] } }
+    expect(listed.result.tools.length).toBeGreaterThan(0)
+  })
+
+  it('accepting an unknown credential grants nothing: the call is still refused by auth', async () => {
+    const handler = createMcpHttpHandler(createApp(), undefined, { verifyCredential: () => true })
+    const res = await handler(
+      new Request('http://api.test/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: 'Bearer forged',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'things_create', arguments: { name: 'x' } },
+        }),
+      }),
+    )
+    const out = (await res.json()) as { result: { isError?: boolean; content: { text: string }[] } }
+    expect(out.result.isError).toBe(true)
+    expect(out.result.content[0]!.text).toContain('unauthenticated')
   })
 })

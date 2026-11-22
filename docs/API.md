@@ -140,7 +140,12 @@ machine it runs on.
 `protectedResourceMetadata`, `PROTECTED_RESOURCE_PATH`, `oauthChallenge`, `declaredScopes`,
 `OAuthResourceConfig` — where a caller with no credential goes to get one (RFC 9728). Discovery
 only: an app names somebody else's authorization server, and the scopes advertised are the ones its
-ops already declare.
+ops already declare. `createMcpHttpHandler`'s `McpHttpOptions` take an `oauth` description of their
+own (an MCP endpoint at `https://host/mcp` that takes OAuth tokens while REST does not),
+`unauthenticated: 'refuse'` (a credential-less request gets the `401` and challenge the MCP
+authorization spec asks for, instead of being served with a pointer header) and `verifyCredential`
+(a transport-level recognition check: `false` answers `401 invalid_token`, so an OAuth client
+refreshes; the pipeline still authenticates and authorizes every call).
 
 ## `@omniface/testing`
 
