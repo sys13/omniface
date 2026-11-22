@@ -141,6 +141,57 @@ export function apiKeyStoreCases(options: ApiKeyStoreCaseOptions): StoreCase[] {
       ]
     }),
 
+    wrap('revokeAll leaves expired keys alone and does not count them', async (store) => {
+      const live = record()
+      const expired = record({ expiresAt: new Date(Date.now() - 60_000).toISOString() })
+      const later = record({ expiresAt: new Date(Date.now() + 86_400_000).toISOString() })
+      for (const r of [live, expired, later]) await store.insert(r)
+      const n = await store.revokeAll('user_1')
+      return [
+        ...eq('revokeAll', n, 2),
+        ...((await store.findByHash(expired.hash))?.revokedAt ? ['an expired key was stamped revoked'] : []),
+        ...((await store.findByHash(later.hash))?.revokedAt ? [] : ['a key expiring later was not revoked']),
+      ]
+    }),
+
+    wrap('delete removes only that principal\'s key, once', async (store) => {
+      const mine = record()
+      const theirs = record({ principal: { id: 'user_2', kind: 'user' } })
+      for (const r of [mine, theirs]) await store.insert(r)
+      const stolen = await store.delete(theirs.id, 'user_1')
+      const first = await store.delete(mine.id, 'user_1')
+      const second = await store.delete(mine.id, 'user_1')
+      return [
+        ...eq('delete of another principal\'s key', stolen, false),
+        ...eq('first delete', first, true),
+        ...eq('second delete', second, false),
+        ...eq('findByHash after delete', await store.findByHash(mine.hash), undefined),
+        ...eq('listFor after delete', (await store.listFor('user_1')).map((r) => r.id), []),
+        ...((await store.findByHash(theirs.hash)) ? [] : ["another principal's key was deleted"]),
+        ...eq('delete of a missing key', await store.delete('key_nope', 'user_1'), false),
+      ]
+    }),
+
+    wrap('touch with ifOlderThan writes only over an older or absent last use', async (store) => {
+      const row = record()
+      await store.insert(row)
+      // Absent: written.
+      await store.touch(row.id, '2026-01-01T00:00:30.000Z', 'a/1', '2026-01-01T00:00:00.000Z')
+      // Last use 00:00:30 is not older than 00:00:10: skipped.
+      await store.touch(row.id, '2026-01-01T00:01:10.000Z', 'b/1', '2026-01-01T00:00:10.000Z')
+      // Copied: the memory store hands back its own objects.
+      const kept = { ...(await store.findByHash(row.hash)) }
+      // Last use 00:00:30 is older than 00:01:00: written.
+      await store.touch(row.id, '2026-01-01T00:02:00.000Z', 'c/1', '2026-01-01T00:01:00.000Z')
+      const moved = await store.findByHash(row.hash)
+      return [
+        ...eq('kept lastUsedAt', kept?.lastUsedAt, '2026-01-01T00:00:30.000Z'),
+        ...eq('kept client', kept?.lastUsedClient, 'a/1'),
+        ...eq('moved lastUsedAt', moved?.lastUsedAt, '2026-01-01T00:02:00.000Z'),
+        ...eq('moved client', moved?.lastUsedClient, 'c/1'),
+      ]
+    }),
+
     wrap('touch records last use and the client', async (store) => {
       const row = record()
       await store.insert(row)

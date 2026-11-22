@@ -23,6 +23,12 @@ export type AuthContext = {
   readonly headers?: Headers
   readonly facet: FacetName
   readonly requestId: string
+  /**
+   * Who the caller says it is, as the facet knows it: the MCP `initialize` clientInfo (remembered
+   * across stateless HTTP requests), a CLI or SDK name. Attribution only: it must never decide who
+   * the principal is or what it may do.
+   */
+  readonly client?: { name?: string; version?: string }
 }
 
 export type AuthSession = {

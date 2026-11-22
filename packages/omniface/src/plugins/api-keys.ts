@@ -19,7 +19,7 @@ export type ApiKeyRecord = {
   expiresAt?: string
   /** ISO time the key last authenticated, to within the adapter's throttle. */
   lastUsedAt?: string
-  /** Who used it last (the client's User-Agent), truncated. */
+  /** Who used it last: the MCP client's announced name when there is one, else the User-Agent. Truncated. */
   lastUsedClient?: string
 }
 
@@ -40,11 +40,27 @@ export interface ApiKeyStore {
   listFor(principalId: string): Promise<ApiKeyRecord[]>
   /** False when the key does not exist, belongs to someone else, or is already revoked. */
   revoke(id: string, principalId: string): Promise<boolean>
-  /** Revoke every active key of one principal. Returns how many were revoked. */
+  /**
+   * Revoke every live key of one principal: not revoked and not past its expiry. Returns how many
+   * were revoked. Expired keys are left as they are (they are dead already) and not counted.
+   */
   revokeAll(principalId: string): Promise<number>
-  /** Stamp last use. The adapter calls this at most once per key per `touchIntervalMs`. */
-  touch(id: string, at: string, client?: string): Promise<void>
+  /**
+   * Remove one key of one principal for good. False when it does not exist or belongs to someone
+   * else. The store does not check the key is inactive: `apiKeys.delete` does that.
+   */
+  delete(id: string, principalId: string): Promise<boolean>
+  /**
+   * Stamp last use. The adapter calls this at most once per key per `touchIntervalMs` per process.
+   * With `ifOlderThan` (an ISO time), write only when the stored `lastUsedAt` is absent or earlier,
+   * so several processes sharing one store still write about once per interval between them.
+   */
+  touch(id: string, at: string, client?: string, ifOlderThan?: string): Promise<void>
 }
+
+/** A key that can still authenticate: not revoked and not past its expiry. */
+export const isLiveKey = (row: Pick<ApiKeyRecord, 'revokedAt' | 'expiresAt'>, now = Date.now()): boolean =>
+  !row.revokedAt && !(row.expiresAt && Date.parse(row.expiresAt) <= now)
 
 export function memoryKeyStore(): ApiKeyStore {
   const rows = new Map<string, ApiKeyRecord>()
@@ -67,16 +83,24 @@ export function memoryKeyStore(): ApiKeyStore {
     },
     async revokeAll(principalId) {
       let n = 0
+      const now = Date.now()
       for (const row of rows.values()) {
-        if (row.principal.id !== principalId || row.revokedAt) continue
-        row.revokedAt = new Date().toISOString()
+        if (row.principal.id !== principalId || !isLiveKey(row, now)) continue
+        row.revokedAt = new Date(now).toISOString()
         n++
       }
       return n
     },
-    async touch(id, at, client) {
+    async delete(id, principalId) {
+      const row = rows.get(id)
+      if (!row || row.principal.id !== principalId) return false
+      rows.delete(id)
+      return true
+    },
+    async touch(id, at, client, ifOlderThan) {
       const row = rows.get(id)
       if (!row) return
+      if (ifOlderThan && row.lastUsedAt && row.lastUsedAt >= ifOlderThan) return
       row.lastUsedAt = at
       if (client) row.lastUsedClient = client
       else delete row.lastUsedClient
@@ -109,8 +133,14 @@ export type ApiKeysOptions = {
    */
   neverGrant?: string[]
   /** Minimum gap between two writes of one key's `lastUsedAt`. Default 60000. 0 writes every time. */
-  touchIntervalMs?: number  /** Add `apiKeys.revokeAll`, which revokes every active key of the caller. Default false: it is one more tool for agents to choose from. */
+  touchIntervalMs?: number
+  /** Add `apiKeys.revokeAll`, which revokes every active key of the caller. Default false: it is one more tool for agents to choose from. */
   revokeAll?: boolean
+  /**
+   * Add `apiKeys.delete`, which removes one of the caller's revoked or expired keys for good (an
+   * active key must be revoked first). Default false, for the same reason as `revokeAll`.
+   */
+  delete?: boolean
 }
 
 export type ApiKeyAdapterOptions = {
@@ -121,12 +151,33 @@ export type ApiKeyAdapterOptions = {
   name?: string
   /** Minimum gap between two writes of one key's `lastUsedAt`. Default 60000. */
   touchIntervalMs?: number
+  /**
+   * Scopes a minted key never carries, whatever its stored record says (same matching as
+   * `apiKeys`'s `neverGrant`). A stored scope that would satisfy one of these is dropped from the
+   * principal at authentication, so a key minted before the scope was refused stops carrying it.
+   * Seed keys (`keys`) are the operator's own configuration and keep their scopes.
+   */
+  neverGrant?: string[]
 }
 
+/** Does holding `scope` amount to holding any of `never`? `*` and `x:*` count as well as literals. */
+const grantsNever = (scope: string, never: readonly string[] | undefined): boolean =>
+  Boolean(never?.some((n) => hasScope([scope], n)))
+
+/**
+ * The stored scopes a key may not carry under this `neverGrant`, e.g. to log or revoke keys minted
+ * before a scope was refused. Empty when the key is clean.
+ */
+export function neverGrantedScopes(scopes: readonly string[], neverGrant: readonly string[]): string[] {
+  return scopes.filter((s) => grantsNever(s, neverGrant))
+}
+
+type Seeder = (() => Promise<void>) & { readonly hashes: ReadonlySet<string> }
+
 /** Insert seed keys once, however many callers race for them. */
-function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<void> {
+function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): Seeder {
   let seeded: Promise<void> | undefined
-  return () =>
+  const run = () =>
     (seeded ??= Promise.all(
       (keys ?? []).map((k, i) =>
         store.insert({
@@ -140,6 +191,7 @@ function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<
         }),
       ),
     ).then(() => undefined))
+  return Object.assign(run, { hashes: new Set((keys ?? []).map((k) => hashKey(k.key))) })
 }
 
 /**
@@ -150,15 +202,18 @@ function seeder(store: ApiKeyStore, keys: SeedKey[] | undefined): () => Promise<
  * rejected: that is this adapter's own verdict, not someone else's token.
  */
 export function apiKeyAdapter(options: ApiKeyAdapterOptions): AuthAdapter {
-  return keyAdapter(options.store, seeder(options.store, options.keys), options.name, options.touchIntervalMs)
+  return keyAdapter(options.store, seeder(options.store, options.keys), {
+    ...(options.name ? { name: options.name } : {}),
+    ...(options.touchIntervalMs !== undefined ? { touchIntervalMs: options.touchIntervalMs } : {}),
+    ...(options.neverGrant ? { neverGrant: options.neverGrant } : {}),
+  })
 }
 
 /** The adapter over a seeder the caller owns, so `apiKeys()` and its adapter seed once between them. */
 function keyAdapter(
   store: ApiKeyStore,
-  seed: () => Promise<void>,
-  name = 'api-key',
-  touchIntervalMs = 60_000,
+  seed: Seeder,
+  { name = 'api-key', touchIntervalMs = 60_000, neverGrant }: { name?: string; touchIntervalMs?: number; neverGrant?: readonly string[] } = {},
 ): AuthAdapter {
   /** When each key was last written, so a busy key costs one write per interval, not one per call. */
   const touched = new Map<string, number>()
@@ -175,12 +230,20 @@ function keyAdapter(
       const prev = touched.get(row.id)
       if (prev === undefined || now - prev >= touchIntervalMs) {
         touched.set(row.id, now)
-        const client = ctx.headers?.get('user-agent')?.slice(0, 200)
+        // The name the MCP client announced says more than its HTTP library's User-Agent.
+        const client = (ctx.client?.name || ctx.headers?.get('user-agent'))?.slice(0, 200)
+        // The in-memory map spares the store a round-trip per request; `ifOlderThan` keeps other
+        // processes sharing the store from writing again inside the same interval.
+        const ifOlderThan = touchIntervalMs > 0 ? new Date(now - touchIntervalMs).toISOString() : undefined
         // Bookkeeping must never fail a request.
-        await store.touch(row.id, new Date(now).toISOString(), client).catch(() => touched.delete(row.id))
+        await store.touch(row.id, new Date(now).toISOString(), client, ifOlderThan).catch(() => touched.delete(row.id))
       }
+      // A key minted before a scope was refused keeps the row, not the scope. `*` covers every
+      // scope, refused ones included, so it is dropped whole rather than narrowed.
+      const strip = neverGrant?.length && !seed.hashes.has(row.hash)
+      const scopes = strip ? row.scopes.filter((s) => !grantsNever(s, neverGrant)) : row.scopes
       return {
-        principal: { ...row.principal, scopes: row.scopes },
+        principal: { ...row.principal, scopes },
         session: { provider: 'api-key', keyId: row.id, keyName: row.name },
       }
     },
@@ -204,7 +267,10 @@ export function apiKeys(options: ApiKeysOptions = {}) {
   const store = options.store ?? memoryKeyStore()
   const keyPrefix = options.prefix ?? 'fk_'
   const seed = seeder(store, options.keys)
-  const adapter = keyAdapter(store, seed, undefined, options.touchIntervalMs)
+  const adapter = keyAdapter(store, seed, {
+    ...(options.touchIntervalMs !== undefined ? { touchIntervalMs: options.touchIntervalMs } : {}),
+    ...(options.neverGrant ? { neverGrant: options.neverGrant } : {}),
+  })
 
   const ops = {
     auth: {
@@ -235,7 +301,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
         .handle(async ({ input, principal }) => {
           const denied = input.scopes.filter((s) => !hasScope(principal.scopes, s))
           if (denied.length) throw errors.forbidden(`Cannot grant scopes you do not hold: ${denied.join(', ')}`)
-          const never = input.scopes.filter((s) => options.neverGrant?.some((n) => hasScope([s], n)))
+          const never = input.scopes.filter((s) => grantsNever(s, options.neverGrant))
           if (never.length) throw errors.forbidden(`API keys cannot be granted: ${never.join(', ')}`)
           const key = keyPrefix + randomBytes(24).toString('base64url')
           const id = `key_${randomBytes(6).toString('hex')}`
@@ -288,6 +354,21 @@ export function apiKeys(options: ApiKeysOptions = {}) {
           if (!(await store.revoke(input.id, principal.id))) throw errors.notFound(`No active key "${input.id}"`)
           return { id: input.id, revoked: true as const }
         }),
+      delete: op({
+        description:
+          'Delete one of your API keys for good. Only a revoked or expired key can be deleted: revoke an active key first.',
+        input: z.object({ id: z.string() }),
+        output: z.object({ id: z.string(), deleted: z.literal(true) }),
+      })
+        .traits({ destructive: true, scope: 'apiKeys:write' })
+        .handle(async ({ input, principal }) => {
+          const row = (await store.listFor(principal.id)).find((r) => r.id === input.id)
+          if (!row) throw errors.notFound(`No key "${input.id}"`)
+          // Revoked and expired are both final, so this check cannot go stale before the delete.
+          if (isLiveKey(row)) throw errors.conflict(`Key "${input.id}" is still active. Revoke it first.`)
+          if (!(await store.delete(input.id, principal.id))) throw errors.notFound(`No key "${input.id}"`)
+          return { id: input.id, deleted: true as const }
+        }),
       revokeAll: op({
         description: 'Revoke every active API key you own. Requests using them fail immediately.',
         output: z.object({ revoked: z.number() }),
@@ -298,6 +379,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
   }
 
   if (!options.revokeAll) delete (ops.apiKeys as { revokeAll?: unknown }).revokeAll
+  if (!options.delete) delete (ops.apiKeys as { delete?: unknown }).delete
 
   const plugin = definePlugin<{}, typeof ops>({
     name: 'apiKeys',
@@ -325,6 +407,7 @@ export function apiKeys(options: ApiKeysOptions = {}) {
                 ...(inv.headers ? { headers: inv.headers } : {}),
                 facet: inv.facet,
                 requestId: inv.requestId,
+                ...(inv.client ? { client: inv.client } : {}),
               })
               // Sole authenticator: an unrecognised key is a bad key, not somebody else's token.
               if (!result) throw errors.unauthenticated('Invalid or revoked API key')

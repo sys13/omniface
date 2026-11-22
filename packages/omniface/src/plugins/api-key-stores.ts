@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { ApiKeyRecord, ApiKeyStore } from './api-keys.ts'
+import { isLiveKey, type ApiKeyRecord, type ApiKeyStore } from './api-keys.ts'
 
 /**
  * Durable {@link ApiKeyStore} implementations.
@@ -86,19 +86,28 @@ export function fileKeyStore(options: FileKeyStoreOptions): ApiKeyStore {
     },
     async revokeAll(principalId) {
       return mutate((keys) => {
-        const stamp = new Date().toISOString()
+        const now = Date.now()
+        const stamp = new Date(now).toISOString()
         let n = 0
         const next = keys.map((k) => {
-          if (k.principal.id !== principalId || k.revokedAt) return k
+          if (k.principal.id !== principalId || !isLiveKey(k, now)) return k
           n++
           return { ...k, revokedAt: stamp }
         })
         return n ? { keys: next, result: n } : { result: 0 }
       })
     },
-    async touch(id, at, client) {
+    async delete(id, principalId) {
+      return mutate((keys) => {
+        if (!keys.some((k) => k.id === id && k.principal.id === principalId)) return { result: false }
+        return { keys: keys.filter((k) => k.id !== id), result: true }
+      })
+    },
+    async touch(id, at, client, ifOlderThan) {
       await mutate((keys) => {
-        if (!keys.some((k) => k.id === id)) return { result: undefined }
+        const row = keys.find((k) => k.id === id)
+        if (!row) return { result: undefined }
+        if (ifOlderThan && row.lastUsedAt && row.lastUsedAt >= ifOlderThan) return { result: undefined }
         const next = keys.map((k) => {
           if (k.id !== id) return k
           const { lastUsedClient: _drop, ...rest } = k
@@ -243,21 +252,42 @@ export function sqlKeyStore(options: SqlKeyStoreOptions): ApiKeyStore {
       return rows.map(toRecord)
     },
     async revokeAll(principalId) {
-      // No RETURNING: not every driver hands rows back from an UPDATE. Count, then update.
+      // Live means unrevoked and unexpired; expiry is an ISO string, so it compares as text.
+      // No RETURNING, and drivers disagree about affected-row counts, so the count is the rows
+      // selected beforehand that now carry this call's stamp: a key revoked by someone else in
+      // between is not counted. (Two calls in the same millisecond share a stamp; both may count.)
       const mark = (n: number) => (numbered ? '$' + n : '?')
-      const active = await run(`SELECT id FROM ${table} WHERE principal_id = ${mark(1)} AND revoked_at IS NULL`, [principalId])
-      if (!active.length) return 0
+      const now = new Date().toISOString()
+      const live = `principal_id = ${mark(1)} AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ${mark(2)})`
+      const before = await run(`SELECT id FROM ${table} WHERE ${live}`, [principalId, now])
+      if (!before.length) return 0
       await options.query(
-        `UPDATE ${table} SET revoked_at = ${mark(1)} WHERE principal_id = ${mark(2)} AND revoked_at IS NULL`,
-        [new Date().toISOString(), principalId],
+        `UPDATE ${table} SET revoked_at = ${mark(1)} WHERE principal_id = ${mark(2)} AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ${mark(3)})`,
+        [now, principalId, now],
       )
-      return active.length
+      const ids = before.map((r) => String(r.id))
+      const after = await run(
+        `SELECT id FROM ${table} WHERE revoked_at = ${mark(1)} AND id IN (${ids.map((_, i) => mark(i + 2)).join(', ')})`,
+        [now, ...ids],
+      )
+      return after.length
     },
-    async touch(id, at, client) {
+    async delete(id, principalId) {
+      // Read, delete, read again: the absence afterwards is what we report, whatever the driver
+      // says about affected rows.
+      const existing = await run(`SELECT id FROM ${table} WHERE id = ${p(1)} AND principal_id = ${p(1, 2)}`, [id, principalId])
+      if (!existing[0]) return false
+      await options.query(`DELETE FROM ${table} WHERE id = ${p(1)} AND principal_id = ${p(1, 2)}`, [id, principalId])
+      return true
+    },
+    async touch(id, at, client, ifOlderThan) {
       const mark = (n: number) => (numbered ? '$' + n : '?')
+      // The condition is what keeps several processes to about one write per interval between
+      // them: each one's in-memory throttle only knows about itself.
+      const guard = ifOlderThan ? ` AND (last_used_at IS NULL OR last_used_at < ${mark(4)})` : ''
       await options.query(
-        `UPDATE ${table} SET last_used_at = ${mark(1)}, last_used_client = ${mark(2)} WHERE id = ${mark(3)}`,
-        [at, client ?? null, id],
+        `UPDATE ${table} SET last_used_at = ${mark(1)}, last_used_client = ${mark(2)} WHERE id = ${mark(3)}${guard}`,
+        ifOlderThan ? [at, client ?? null, id, ifOlderThan] : [at, client ?? null, id],
       )
     },
     async revoke(id, principalId) {

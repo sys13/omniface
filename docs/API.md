@@ -100,7 +100,7 @@ facets that have to read what a schema advertises.
   The contract types are re-exported here too, so an adapter author needs one import.
 - **`omniface/plugins`** — `logging`, `otel` (+ the structural `Otel*` types: tracing and RED metrics
   over the optional `@opentelemetry/api` peer), `apiKeys` (+ `apiKeyAdapter`, `memoryKeyStore`, `fileKeyStore`,
-  `sqlKeyStore`, `apiKeyTableSql`, `ApiKeyStore`), `auth`, `scopes` (+ `hasScope`), `rateLimit`
+  `sqlKeyStore`, `apiKeyTableSql`, `ApiKeyStore`, `isLiveKey`, `neverGrantedScopes`), `auth`, `scopes` (+ `hasScope`), `rateLimit`
   (+ `parseRate`), `idempotency` (+ `memoryIdempotencyStore`, `IdempotencyStore`), `agentTokens`
   (+ `agentTokenAdapter`, `memoryAgentTokenStore`, `AgentTokenStore`: short-lived, scope-narrowed
   credentials for the agent in a visitor's browser) and `audit`,

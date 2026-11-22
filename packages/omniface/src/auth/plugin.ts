@@ -55,6 +55,7 @@ export function auth(options: AuthOptions) {
           headers: inv.headers,
           facet: inv.facet,
           requestId: inv.requestId,
+          ...(inv.client ? { client: inv.client } : {}),
         }
         for (const adapter of adapters) {
           let result
