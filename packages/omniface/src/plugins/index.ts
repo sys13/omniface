@@ -49,5 +49,16 @@ export {
   type OtelSpan,
   type OtelTracer,
 } from './otel.ts'
-export { parseRate, rateLimit, type RateLimitOptions, type RateSpec } from './rate-limit.ts'
+export {
+  memoryRateLimitStore,
+  parseRate,
+  rateLimit,
+  retryAfterSeconds,
+  type MemoryRateLimitStoreOptions,
+  type RateLimitOptions,
+  type RateLimitStore,
+  type RateLimitTake,
+  type RateLimitVerdict,
+  type RateSpec,
+} from './rate-limit.ts'
 export { hasScope, scopes, type ScopesOptions } from './scopes.ts'
