@@ -1,5 +1,5 @@
 import type { AnySchema } from './standard.ts'
-import { getFieldTraits, getSchemaName, type FieldTraits } from './traits.ts'
+import { getFieldTraits, getSchemaName, markReached, traitsVersion, type FieldTraits } from './traits.ts'
 
 export type JSONSchema = Record<string, any>
 export type IO = 'input' | 'output'
@@ -15,11 +15,45 @@ export interface SchemaAdapter {
 
 const adapters = new Map<string, SchemaAdapter>()
 
+/**
+ * Conversions already done, per schema object and direction. Schemas are immutable values that an
+ * app declares once at module level, but every `createApp` converts all of them again — and the
+ * conversion dominates the cost of building an app. Every caller gets the same object, frozen,
+ * so nothing one caller does to it can reach the next: a mutation throws instead. (Copying per
+ * call was tried; the copy cost as much as the conversion it saved.)
+ */
+let converted = new WeakMap<object, Partial<Record<IO, JSONSchema>>>()
+let convertedAt = traitsVersion()
+
 export function registerSchemaAdapter(adapter: SchemaAdapter): void {
   adapters.set(adapter.vendor, adapter)
+  // A new adapter can change what an already-converted schema converts to.
+  converted = new WeakMap()
 }
 
 export function toJSONSchema(schema: AnySchema, io: IO): JSONSchema {
+  // Any trait registered since could be on a schema nested in one already converted.
+  if (convertedAt !== traitsVersion()) {
+    converted = new WeakMap()
+    convertedAt = traitsVersion()
+  }
+  const entry = converted.get(schema) ?? {}
+  if (!entry[io]) {
+    entry[io] = deepFreeze(convert(schema, io))
+    converted.set(schema, entry)
+  }
+  return entry[io]
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value)
+    for (const v of Object.values(value)) deepFreeze(v)
+  }
+  return value
+}
+
+function convert(schema: AnySchema, io: IO): JSONSchema {
   const std = schema['~standard'] as AnySchema['~standard'] & {
     jsonSchema?: { input: (o: { target: string }) => JSONSchema; output: (o: { target: string }) => JSONSchema }
   }
@@ -28,7 +62,9 @@ export function toJSONSchema(schema: AnySchema, io: IO): JSONSchema {
   if (adapter) json = adapter.toJSONSchema(schema, io)
   else if (std.jsonSchema) json = std.jsonSchema[io]({ target: 'draft-2020-12' })
   else json = {}
-  // Top-level traits and names apply regardless of adapter.
+  // Top-level traits and names apply regardless of adapter. The adapter marks what it visited;
+  // the root is marked here too, so a trait added to it later invalidates the cached conversion.
+  markReached(schema)
   const traits = getFieldTraits(schema)
   if (traits) applyFieldTraits(json, traits)
   const name = getSchemaName(schema)
@@ -155,7 +191,21 @@ export function redact(value: unknown, schema: JSONSchema, replacement = '[redac
 }
 
 /** The schema a facet publishes: internal fields removed everywhere. */
+/**
+ * `publicSchema` of a frozen schema — one `toJSONSchema` returned, so one that cannot change —
+ * computed once. Every app built from the same definitions publishes the same schemas, and a
+ * process that builds many (a test suite) was spending its time re-deriving them.
+ */
+const published = new WeakMap<JSONSchema, JSONSchema>()
+
 export function publicSchema(schema: JSONSchema): JSONSchema {
+  if (!Object.isFrozen(schema)) return derivePublic(schema)
+  let out = published.get(schema)
+  if (!out) published.set(schema, (out = deepFreeze(derivePublic(schema))))
+  return out
+}
+
+function derivePublic(schema: JSONSchema): JSONSchema {
   const visit = (node: any): any => {
     if (Array.isArray(node)) return node.map(visit)
     if (!node || typeof node !== 'object') return node

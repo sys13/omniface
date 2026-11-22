@@ -63,6 +63,16 @@ export const UNTRUSTED_NOTE =
 /** Whether an op's output carries content someone else wrote: the op trait, or any output field. */
 export function isUntrusted(traits: OpTraits, output: JSONSchema): boolean {
   if (traits.untrusted) return true
+  // A frozen output (what `publicSchema` returns) cannot change, so its answer cannot either.
+  if (!Object.isFrozen(output)) return untrustedFields(output)
+  let answer = untrustedOutputs.get(output)
+  if (answer === undefined) untrustedOutputs.set(output, (answer = untrustedFields(output)))
+  return answer
+}
+
+const untrustedOutputs = new WeakMap<JSONSchema, boolean>()
+
+function untrustedFields(output: JSONSchema): boolean {
   const row = rowSchema(output)
   for (const field of Object.values(objectProperties(row ?? output, output))) {
     if (hasTrait(field, 'untrusted')) return true

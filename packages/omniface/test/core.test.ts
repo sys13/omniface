@@ -253,6 +253,23 @@ describe('schema layer', () => {
     expect(toJSONSchema(Note, 'output')['x-omniface-name']).toBe('Note')
   })
 
+  it('converts a schema once, and no caller can change what the next one gets', () => {
+    const first = toJSONSchema(Note, 'output')
+    expect(toJSONSchema(Note, 'output')).toBe(first)
+    expect(() => {
+      first.properties.body.type = 'mangled'
+    }).toThrow(TypeError)
+    expect(toJSONSchema(Note, 'output').properties.body.type).toBe('string')
+  })
+
+  it('sees traits registered after a schema was first converted', () => {
+    const inner = z.string()
+    const outer = z.object({ inner })
+    expect(toJSONSchema(outer, 'output').properties.inner['x-omniface-pii']).toBeUndefined()
+    t(inner, { pii: true })
+    expect(toJSONSchema(outer, 'output').properties.inner['x-omniface-pii']).toBe(true)
+  })
+
   it('strips internal and redacts pii, including nested arrays', () => {
     const schema = toJSONSchema(t.page(Note), 'output')
     const value = { items: [{ id: '1', body: 'b', email: 'a@b.co', secret: 'x' }], nextCursor: null }

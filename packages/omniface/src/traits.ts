@@ -63,7 +63,21 @@ const names = new WeakMap<object, string>()
 const registered: WeakRef<object>[] = []
 const reached = new WeakSet<object>()
 
+/**
+ * Bumped when a trait or name lands on a schema some conversion has already visited. A converted
+ * JSON Schema depends on the traits of every schema nested in it, so a cache of conversions is
+ * only good for the version it was made at. A schema no conversion has reached cannot be inside
+ * a cached one — which is the usual case, `t(z.string(), …)` at the moment the schema is made —
+ * so those registrations leave the cache alone.
+ */
+let version = 0
+export const traitsVersion = (): number => version
+const touch = (schema: object) => {
+  if (reached.has(schema)) version++
+}
+
 export function setFieldTraits<S extends object>(schema: S, traits: FieldTraits): S {
+  touch(schema)
   if (!fieldTraits.has(schema)) registered.push(new WeakRef(schema))
   fieldTraits.set(schema, { ...fieldTraits.get(schema), ...traits })
   return schema
@@ -107,6 +121,7 @@ export function hasFieldTraits(schema: object): boolean {
 }
 
 export function setSchemaName<S extends object>(schema: S, name: string): S {
+  touch(schema)
   names.set(schema, name)
   return schema
 }

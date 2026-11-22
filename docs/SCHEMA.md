@@ -23,6 +23,12 @@ So facet reads a **JSON Schema** version of each schema:
 2. Otherwise use a per-library converter (`z.toJSONSchema`, `@valibot/to-json-schema`, ArkType's `toJsonSchema`).
 3. Keep **input and output** JSON Schema separate — transforms and defaults make them differ.
 
+Each schema object is converted once per direction and the result is shared, deep-frozen:
+`toJSONSchema` (and `publicSchema` of a frozen schema) hands every caller the same object, so
+copy before changing one. Registering a trait or name on a schema a conversion has already
+visited invalidates the cache; registering one on a fresh schema (the usual `t(z.string(), …)`)
+does not.
+
 **Rule:** facet's core never looks inside a Zod/Valibot object. It works with Standard Schema
 (for validation and types) and JSON Schema (for describing), and nothing else. Anything
 library-specific lives in a small **per-library adapter**: JSON Schema conversion, looking inside

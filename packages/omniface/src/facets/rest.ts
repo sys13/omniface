@@ -85,11 +85,13 @@ function mountPluginRoutes(hono: Hono, adapters: readonly PluginAdapters[]): voi
 /** Mount every REST-bound op, plus /openapi.json and /.well-known/facet.json. */
 export function createRestApp(app: App, manifest: Manifest = buildManifest(app), options: RestAppOptions = {}): Hono {
   const hono = new Hono()
-  const openapi = buildOpenApi(manifest)
+  // Built on first request: it is the most expensive thing derived from a manifest, and most
+  // servers — every test harness among them — never serve it.
+  let openapi: ReturnType<typeof buildOpenApi> | undefined
   const adapters = app.adapters ?? []
   hono.use('*', securityMiddleware(options.security ?? (app.facets['rest'] as RestConfig | null)?.security ?? {}))
 
-  hono.get('/openapi.json', (c) => c.json(openapi))
+  hono.get('/openapi.json', (c) => c.json((openapi ??= buildOpenApi(manifest))))
   hono.get('/.well-known/facet.json', (c) => c.json(manifest))
   // Where a caller goes to get a credential (RFC 9728). Served next to the manifest because it is
   // the same kind of thing: something a stranger can read before it has been let in.

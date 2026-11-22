@@ -56,6 +56,8 @@ export function hoistNamedSchemas(manifest: Manifest, prefix = '#/components/sch
   const schemas: Record<string, JSONSchema> = {}
   const owners: Record<string, string[]> = {}
   const conflicts: HoistedSchemas['conflicts'] = []
+  /** `stable(schemas[name])`, computed once: a popular type is compared against on every use. */
+  const shapes: Record<string, string> = {}
   const ops: HoistedSchemas['ops'] = {}
 
   for (const op of manifest.ops) {
@@ -92,7 +94,7 @@ export function hoistNamedSchemas(manifest: Manifest, prefix = '#/components/sch
         owners[name] = [opId]
       } else {
         ;(owners[name] ??= []).push(opId)
-        if (stable(existing) !== stable(body) && !conflicts.some((c) => c.name === name)) {
+        if ((shapes[name] ??= stable(existing)) !== stable(body) && !conflicts.some((c) => c.name === name)) {
           conflicts.push({ name, ops: [...new Set(owners[name]!)] })
         }
       }
