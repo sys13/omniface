@@ -35,6 +35,19 @@ function toolAnnotations(traits: OpTraits, untrusted: boolean): ManifestTool['an
   }
 }
 
+const DEPRECATED_MARKER = /^deprecated\b/i
+
+/**
+ * The description an agent reads for an op with the `deprecated` trait: `Deprecated: <message>`
+ * in front, since MCP has no `deprecated` flag (OpenAPI gets `deprecated: true`). A description
+ * that already starts with the marker is left as it is.
+ */
+export function withDeprecation(description: string, traits: OpTraits): string {
+  const d = traits.deprecated
+  if (!d || DEPRECATED_MARKER.test(description)) return description
+  return typeof d === 'string' && d.trim() ? `Deprecated: ${d.trim()} ${description}` : `Deprecated. ${description}`
+}
+
 const toolName = (projection: McpProjection): string => ('tool' in projection ? projection.tool : `group:${projection.group}`)
 
 export const mcpFacet = defineFacet<McpConfig, McpProjection, McpSettings>({
@@ -53,7 +66,7 @@ export const mcpFacet = defineFacet<McpConfig, McpProjection, McpSettings>({
     }
     const override = config.ops?.[op.id]
     if (override === false) return null
-    const described = override?.description ?? op.op.description ?? op.id
+    const described = withDeprecation(override?.description ?? op.op.description ?? op.id, op.op.traits ?? {})
     // MCP has no `untrustedContentHint`, and an agent reads the description, so that is where the
     // warning goes on this facet. WebMCP gets the annotation as well.
     const description = isUntrusted(op.op.traits, output) ? `${described}\n\n${UNTRUSTED_NOTE}` : described
@@ -82,7 +95,7 @@ export const mcpFacet = defineFacet<McpConfig, McpProjection, McpSettings>({
       const members = group.ops.map((id) => ops.find((o) => o.id === id)).filter((o): o is ManifestOp => Boolean(o))
       const actions = members.map((o) => o.path[o.path.length - 1]!)
       const lines = members.map(
-        (o, i) => `- ${actions[i]}: ${o.description ?? o.id}. Input: ${JSON.stringify(o.input.properties ?? {})}`,
+        (o, i) => `- ${actions[i]}: ${withDeprecation(o.description ?? o.id, o.traits)}. Input: ${JSON.stringify(o.input.properties ?? {})}`,
       )
       tools.push({
         name,
